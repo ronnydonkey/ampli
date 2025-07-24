@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
     <div id="app">
@@ -55,9 +55,9 @@
         
         <!-- Dashboard Section -->
         <div id="dashboard-section" class="dashboard hidden">
-            <header>
+            <header class="glassmorphic-header">
                 <div class="header-content">
-                    <h1>Ampli Dashboard</h1>
+                    <h1>Ampli</h1>
                     <div class="user-info">
                         <span id="user-email"></span>
                         <button id="signout-btn">Sign Out</button>
@@ -65,10 +65,21 @@
                 </div>
             </header>
             
+            <!-- Hero Animation Section - Above the Fold -->
+            <section class="hero-section">
+                <div class="hero-content">
+                    <h1 class="hero-title">Transform Your Ideas Into Platform-Perfect Content</h1>
+                    <p class="hero-subtitle">Watch your single idea become optimized content for every social platform</p>
+                    <div id="hero-animation" class="hero-animation-container">
+                        <!-- Animation will be inserted here -->
+                    </div>
+                </div>
+            </section>
+            
             <main>
                 <div class="container">
                     <!-- Create Content Section -->
-                    <section class="content-creator">
+                    <section class="content-creator glassmorphic-card">
                         <h2>Create New Content</h2>
                         <form id="content-form">
                             <input type="text" id="content-title" placeholder="Title (optional)">
@@ -77,20 +88,24 @@
                             <div class="platform-selector">
                                 <h3>Select Platforms</h3>
                                 <div class="platforms">
-                                    <label>
+                                    <label class="platform-checkbox">
                                         <input type="checkbox" value="instagram" checked>
+                                        <span class="platform-icon">📸</span>
                                         <span>Instagram</span>
                                     </label>
-                                    <label>
+                                    <label class="platform-checkbox">
                                         <input type="checkbox" value="linkedin" checked>
+                                        <span class="platform-icon">💼</span>
                                         <span>LinkedIn</span>
                                     </label>
-                                    <label>
+                                    <label class="platform-checkbox">
                                         <input type="checkbox" value="twitter" checked>
+                                        <span class="platform-icon">🐦</span>
                                         <span>Twitter/X</span>
                                     </label>
-                                    <label>
+                                    <label class="platform-checkbox">
                                         <input type="checkbox" value="facebook" checked>
+                                        <span class="platform-icon">👥</span>
                                         <span>Facebook</span>
                                     </label>
                                 </div>
@@ -111,14 +126,14 @@
                         </form>
                     </section>
                     
-                    <!-- Amplified Results Section -->
-                    <section id="results-section" class="results hidden">
-                        <h2>Amplified Content</h2>
-                        <div id="amplified-results"></div>
+                    <!-- Platform Results Cards -->
+                    <section id="platform-cards-section" class="platform-cards-section hidden">
+                        <h2>Your Amplified Content</h2>
+                        <div id="platform-cards" class="platform-cards-grid"></div>
                     </section>
                     
                     <!-- Content Archive Section -->
-                    <section class="content-archive">
+                    <section class="content-archive glassmorphic-card">
                         <div class="archive-header">
                             <h2>Content Archive</h2>
                             <div class="archive-controls">
@@ -137,6 +152,24 @@
                     </section>
                 </div>
             </main>
+        </div>
+        
+        <!-- Content Modal -->
+        <div id="content-modal" class="content-modal hidden">
+            <div class="modal-backdrop"></div>
+            <div class="modal-content glassmorphic-modal">
+                <div class="modal-header">
+                    <h3 id="modal-platform-title"></h3>
+                    <button id="modal-close" class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="modal-content-display"></div>
+                    <div class="modal-actions">
+                        <button id="modal-copy-btn" class="modal-action-btn primary">Copy Content</button>
+                        <button id="modal-download-btn" class="modal-action-btn secondary">Download</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     

@@ -205,6 +205,9 @@ function showDashboard() {
     dashboardSection.classList.remove('hidden');
     userEmail.textContent = currentUser.email;
     
+    // Initialize hero animation
+    initializeHeroAnimation();
+    
     // Don't load server content if we're having token issues
     // Just show the interface ready for client-side amplification
     displayClientOnlyMode();
@@ -547,6 +550,220 @@ function createFallbackAmplification(content, platforms, tone) {
     return results;
 }
 
+// Hero Animation Functions
+function initializeHeroAnimation() {
+    const heroAnimation = document.getElementById('hero-animation');
+    
+    heroAnimation.innerHTML = `
+        <div class="value-demonstration">
+            <div class="input-example">
+                <div class="input-card glassmorphic-mini">
+                    <div class="input-header">Your Idea</div>
+                    <div class="input-content">Just launched my app after months of building...</div>
+                </div>
+            </div>
+            
+            <div class="transformation-arrow">
+                <div class="arrow-line"></div>
+                <div class="arrow-head">→</div>
+                <div class="magic-sparkles">✨</div>
+            </div>
+            
+            <div class="output-examples">
+                <div class="platform-preview-card glassmorphic-mini twitter" data-platform="twitter">
+                    <div class="platform-header">
+                        <span class="platform-icon">🐦</span>
+                        <span>Twitter</span>
+                    </div>
+                    <div class="preview-content">Just launched my app after months of that classic founder cycle: brilliant idea → obsessive building → crippling self-doubt...</div>
+                </div>
+                
+                <div class="platform-preview-card glassmorphic-mini linkedin" data-platform="linkedin">
+                    <div class="platform-header">
+                        <span class="platform-icon">💼</span>
+                        <span>LinkedIn</span>
+                    </div>
+                    <div class="preview-content">After months of development, I've learned something crucial about bringing ideas to market. The perfectionist's paradox is real...</div>
+                </div>
+                
+                <div class="platform-preview-card glassmorphic-mini instagram" data-platform="instagram">
+                    <div class="platform-header">
+                        <span class="platform-icon">📸</span>
+                        <span>Instagram</span>
+                    </div>
+                    <div class="preview-content">Plot twist: The hardest part isn't building—it's convincing yourself it's ready 🎯 After months of pushing my app up the mountain...</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Animate the cards
+    setTimeout(() => {
+        const cards = heroAnimation.querySelectorAll('.platform-preview-card');
+        cards.forEach((card, index) => {
+            setTimeout(() => {
+                card.classList.add('animate-in');
+            }, index * 200);
+        });
+    }, 1000);
+}
+
+// Platform Cards Display Functions
+function displayPlatformCards(results) {
+    const platformCardsSection = document.getElementById('platform-cards-section');
+    const platformCards = document.getElementById('platform-cards');
+    
+    platformCardsSection.classList.remove('hidden');
+    
+    // Hide old results section
+    const oldResults = document.getElementById('results-section');
+    if (oldResults) oldResults.classList.add('hidden');
+    
+    const platformOrder = ['twitter', 'linkedin', 'instagram', 'facebook'];
+    const cards = platformOrder
+        .filter(platform => results[platform])
+        .map(platform => {
+            const result = results[platform];
+            const preview = getContentPreview(result.adaptedContent);
+            const isThread = Array.isArray(result.adaptedContent);
+            
+            return `
+                <div class="platform-card glassmorphic-card" data-platform="${platform}" onclick="openContentModal('${platform}')">
+                    <div class="platform-card-header">
+                        <span class="platform-icon">${getPlatformIcon(platform)}</span>
+                        <div class="platform-info">
+                            <h3>${platform.charAt(0).toUpperCase() + platform.slice(1)}</h3>
+                            ${isThread ? `<span class="thread-indicator">Thread (${result.adaptedContent.length} tweets)</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="platform-card-content">
+                        <p class="content-preview">${preview}...</p>
+                    </div>
+                    <div class="platform-card-footer">
+                        <span class="char-count">${getCharacterCount(result.adaptedContent)} chars</span>
+                        <button class="quick-copy-btn" onclick="event.stopPropagation(); quickCopyContent('${platform}')" title="Quick Copy">📋</button>
+                    </div>
+                    <div class="card-glow"></div>
+                </div>
+            `;
+        });
+    
+    platformCards.innerHTML = cards.join('');
+    
+    // Animate cards in
+    setTimeout(() => {
+        const cardElements = platformCards.querySelectorAll('.platform-card');
+        cardElements.forEach((card, index) => {
+            setTimeout(() => {
+                card.classList.add('animate-in');
+            }, index * 150);
+        });
+    }, 100);
+}
+
+function getContentPreview(content) {
+    if (Array.isArray(content)) {
+        return content[0].substring(0, 60);
+    }
+    return content.substring(0, 60);
+}
+
+function getCharacterCount(content) {
+    if (Array.isArray(content)) {
+        return content.reduce((sum, tweet) => sum + tweet.length, 0);
+    }
+    return content.length;
+}
+
+// Modal Functions
+let currentModalPlatform = null;
+let currentModalContent = null;
+
+function openContentModal(platform) {
+    const modal = document.getElementById('content-modal');
+    const title = document.getElementById('modal-platform-title');
+    const contentDisplay = document.getElementById('modal-content-display');
+    
+    currentModalPlatform = platform;
+    currentModalContent = currentResults[platform];
+    
+    title.textContent = platform.charAt(0).toUpperCase() + platform.slice(1);
+    
+    if (Array.isArray(currentModalContent.adaptedContent)) {
+        // Twitter thread
+        contentDisplay.innerHTML = `
+            <div class="modal-twitter-thread">
+                <div class="thread-info">Twitter Thread (${currentModalContent.adaptedContent.length} tweets)</div>
+                ${currentModalContent.adaptedContent.map((tweet, index) => `
+                    <div class="modal-thread-tweet">
+                        <div class="tweet-number">Tweet ${index + 1}:</div>
+                        <div class="tweet-content">${tweet}</div>
+                        <div class="tweet-char-count">${tweet.length}/280 characters</div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } else {
+        // Single content
+        contentDisplay.innerHTML = `
+            <div class="modal-content-text">${currentModalContent.adaptedContent}</div>
+            <div class="modal-char-count">${currentModalContent.adaptedContent.length} characters</div>
+        `;
+    }
+    
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeContentModal() {
+    const modal = document.getElementById('content-modal');
+    modal.classList.add('hidden');
+    document.body.style.overflow = 'auto';
+    currentModalPlatform = null;
+    currentModalContent = null;
+}
+
+function quickCopyContent(platform) {
+    const content = currentResults[platform]?.adaptedContent;
+    if (content) {
+        let textToCopy;
+        if (Array.isArray(content)) {
+            textToCopy = content.map((tweet, index) => `Tweet ${index + 1}:\n${tweet}`).join('\n\n---\n\n');
+        } else {
+            textToCopy = content;
+        }
+        
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            showToast(`${platform.charAt(0).toUpperCase() + platform.slice(1)} content copied!`);
+        });
+    }
+}
+
+function showToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'toast glassmorphic-mini';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 100);
+    
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            document.body.removeChild(toast);
+        }, 300);
+    }, 2000);
+}
+
+// Update the main display function
+function displayAmplifiedResults(results) {
+    // Use new platform cards instead of old results
+    displayPlatformCards(results);
+    currentResults = results;
+}
+
 // Amplification animation functions
 function showAmplificationAnimation(platforms) {
     // Hide results section and show loading animation
@@ -776,6 +993,49 @@ if (archiveSearch) {
 if (archiveFilter) {
     archiveFilter.addEventListener('change', filterAndDisplayContent);
 }
+
+// Modal event listeners
+document.getElementById('modal-close').addEventListener('click', closeContentModal);
+document.getElementById('modal-copy-btn').addEventListener('click', () => {
+    if (currentModalContent) {
+        let textToCopy;
+        if (Array.isArray(currentModalContent.adaptedContent)) {
+            textToCopy = currentModalContent.adaptedContent.map((tweet, index) => `Tweet ${index + 1}:\n${tweet}`).join('\n\n---\n\n');
+        } else {
+            textToCopy = currentModalContent.adaptedContent;
+        }
+        
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            showToast(`${currentModalPlatform.charAt(0).toUpperCase() + currentModalPlatform.slice(1)} content copied!`);
+            closeContentModal();
+        });
+    }
+});
+
+document.getElementById('modal-download-btn').addEventListener('click', () => {
+    if (currentModalContent) {
+        let content;
+        if (Array.isArray(currentModalContent.adaptedContent)) {
+            content = currentModalContent.adaptedContent.map((tweet, index) => `Tweet ${index + 1}:\n${tweet}`).join('\n\n---\n\n');
+        } else {
+            content = currentModalContent.adaptedContent;
+        }
+        
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${currentModalPlatform}-content-${new Date().toISOString().split('T')[0]}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        showToast('Content downloaded!');
+        closeContentModal();
+    }
+});
+
+// Close modal when clicking backdrop
+document.querySelector('.modal-backdrop').addEventListener('click', closeContentModal);
 
 // Google Auth - Client-side flow
 async function signInWithGoogle() {
