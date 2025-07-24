@@ -460,9 +460,11 @@ async function signInWithGoogle() {
     try {
         // Make sure supabase is initialized
         if (!supabase) {
-            console.error('Supabase not initialized');
-            showMessage('Application not properly configured', 'error');
-            return;
+            console.error('Supabase not initialized, attempting to reinitialize...');
+            if (!initializeSupabase()) {
+                showMessage('Application not properly configured - Supabase client failed to initialize', 'error');
+                return;
+            }
         }
         
         // Direct client-side OAuth with Supabase
@@ -537,38 +539,36 @@ async function handleOAuthCallback() {
     }
 }
 
-// Initialize Supabase client
+// Initialize Supabase client directly
 let supabase = null;
+
+function initializeSupabase() {
+    try {
+        // Check if Supabase library is loaded
+        if (typeof window.supabase === 'undefined') {
+            console.error('Supabase library not loaded');
+            return false;
+        }
+        
+        // Initialize with production credentials directly
+        supabase = window.supabase.createClient(
+            'https://dgihdtivvoqczspgxlil.supabase.co',
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnaWhkdGl2dm9xY3pzcGd4bGlsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxOTM2MzAsImV4cCI6MjA2ODc2OTYzMH0.YBxjpZQGiUds-1V8jRQXzWD63OyJyY_kJfIX3NOeuYI'
+        );
+        console.log('Supabase client initialized successfully');
+        return true;
+    } catch (error) {
+        console.error('Failed to initialize Supabase:', error);
+        return false;
+    }
+}
 
 async function initializeApp() {
     try {
-        // Fetch config
-        console.log('Fetching config from:', `${API_URL}/config`);
-        const configResponse = await fetch(`${API_URL}/config`);
-        
-        if (!configResponse.ok) {
-            throw new Error(`Config fetch failed: ${configResponse.status}`);
-        }
-        
-        const config = await configResponse.json();
-        console.log('Config received:', config);
-        
-        if (config.supabaseUrl && config.supabaseAnonKey) {
-            supabase = window.supabase.createClient(
-                config.supabaseUrl,
-                config.supabaseAnonKey
-            );
-            console.log('Supabase client initialized');
-        } else {
-            console.error('Missing Supabase config:', config);
-            // Fallback to hardcoded values for production
-            if (window.location.hostname !== 'localhost') {
-                supabase = window.supabase.createClient(
-                    'https://dgihdtivvoqczspgxlil.supabase.co',
-                    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnaWhkdGl2dm9xY3pzcGd4bGlsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxOTM2MzAsImV4cCI6MjA2ODc2OTYzMH0.YBxjpZQGiUds-1V8jRQXzWD63OyJyY_kJfIX3NOeuYI'
-                );
-                console.log('Supabase client initialized with fallback config');
-            }
+        // Initialize Supabase first
+        if (!initializeSupabase()) {
+            console.error('Failed to initialize Supabase client');
+            return;
         }
         
         // Handle OAuth callback first
@@ -583,5 +583,13 @@ async function initializeApp() {
     }
 }
 
-// Initialize the app
-initializeApp();
+// Initialize app when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Small delay to ensure Supabase library is loaded
+    setTimeout(initializeApp, 100);
+});
+
+// Fallback initialization
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(initializeApp, 100);
+}
