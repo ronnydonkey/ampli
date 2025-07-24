@@ -1,5 +1,7 @@
 // API configuration
-const API_URL = 'http://localhost:3001/api';
+const API_URL = window.location.hostname === 'localhost' 
+    ? 'http://localhost:3001/api' 
+    : `${window.location.protocol}//${window.location.host}/api`;
 let authToken = null;
 let currentUser = null;
 
