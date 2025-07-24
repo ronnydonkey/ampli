@@ -529,26 +529,71 @@ document.getElementById('google-auth-btn').addEventListener('click', signInWithG
 
 // Handle OAuth callback
 async function handleOAuthCallback() {
+    console.log('handleOAuthCallback called');
+    console.log('Current URL:', window.location.href);
+    console.log('URL search params:', window.location.search);
+    
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     const error = urlParams.get('error');
+    const access_token = urlParams.get('access_token');
+    const refresh_token = urlParams.get('refresh_token');
+    
+    console.log('URL params:', { code, error, access_token, refresh_token });
     
     if (error) {
-        showMessage('Authentication failed', 'error');
+        console.error('OAuth error in URL:', error);
+        showMessage('Authentication failed: ' + error, 'error');
         window.history.replaceState({}, document.title, '/');
         return;
     }
     
+    // Check if we have tokens directly in URL (implicit flow)
+    if (access_token) {
+        console.log('Found access token in URL, using implicit flow');
+        try {
+            authToken = access_token;
+            localStorage.setItem('authToken', authToken);
+            
+            // Get user info with the token
+            const { data: { user }, error: userError } = await supabase.auth.getUser(access_token);
+            if (userError) {
+                console.error('Error getting user:', userError);
+                throw userError;
+            }
+            
+            currentUser = user;
+            console.log('User authenticated via implicit flow:', currentUser);
+            
+            // Clean URL
+            window.history.replaceState({}, document.title, '/');
+            
+            showDashboard();
+            return;
+        } catch (error) {
+            console.error('Implicit flow error:', error);
+            showMessage('Failed to complete authentication', 'error');
+            window.history.replaceState({}, document.title, '/');
+            return;
+        }
+    }
+    
+    // Handle authorization code flow
     if (code) {
+        console.log('Found authorization code, exchanging for session');
         try {
             // Make sure supabase is initialized
             if (!supabase) {
                 console.error('Supabase not initialized');
+                showMessage('Authentication service not ready', 'error');
                 return;
             }
             
+            console.log('Exchanging code for session...');
             // Exchange code for session
             const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+            
+            console.log('Exchange result:', { data, error });
             
             if (error) {
                 console.error('Exchange code error:', error);
@@ -556,20 +601,28 @@ async function handleOAuthCallback() {
             }
             
             if (data && data.session) {
+                console.log('Session obtained:', data.session);
                 authToken = data.session.access_token;
                 currentUser = data.user;
                 localStorage.setItem('authToken', authToken);
+                
+                console.log('User authenticated via code flow:', currentUser);
                 
                 // Clean URL
                 window.history.replaceState({}, document.title, '/');
                 
                 showDashboard();
+            } else {
+                console.error('No session in exchange response');
+                throw new Error('No session returned');
             }
         } catch (error) {
             console.error('OAuth callback error:', error);
-            showMessage('Failed to complete authentication', 'error');
+            showMessage('Failed to complete authentication: ' + error.message, 'error');
             window.history.replaceState({}, document.title, '/');
         }
+    } else {
+        console.log('No code or tokens found in URL');
     }
 }
 
@@ -613,6 +666,26 @@ function initializeSupabase() {
         }
         
         console.log('Supabase client initialized successfully');
+        
+        // Set up auth state change listener
+        supabase.auth.onAuthStateChange((event, session) => {
+            console.log('Auth state changed:', event, session);
+            
+            if (event === 'SIGNED_IN' && session) {
+                console.log('User signed in via state change:', session.user);
+                authToken = session.access_token;
+                currentUser = session.user;
+                localStorage.setItem('authToken', authToken);
+                showDashboard();
+            } else if (event === 'SIGNED_OUT') {
+                console.log('User signed out via state change');
+                authToken = null;
+                currentUser = null;
+                localStorage.removeItem('authToken');
+                showAuth();
+            }
+        });
+        
         return true;
     } catch (error) {
         console.error('Failed to initialize Supabase:', error);
@@ -623,17 +696,37 @@ function initializeSupabase() {
 
 async function initializeApp() {
     try {
+        console.log('Initializing app...');
+        
         // Initialize Supabase first
         if (!initializeSupabase()) {
             console.error('Failed to initialize Supabase client');
             return;
         }
         
-        // Handle OAuth callback first
+        // Check for existing Supabase session first
+        console.log('Checking for existing Supabase session...');
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+            console.error('Error getting session:', sessionError);
+        } else if (session) {
+            console.log('Found existing Supabase session:', session);
+            authToken = session.access_token;
+            currentUser = session.user;
+            localStorage.setItem('authToken', authToken);
+            showDashboard();
+            return;
+        } else {
+            console.log('No existing Supabase session found');
+        }
+        
+        // Handle OAuth callback
         await handleOAuthCallback();
         
         // Then check auth if not already authenticated
         if (!authToken) {
+            console.log('No token found, checking localStorage and server auth...');
             await checkAuth();
         }
     } catch (error) {
