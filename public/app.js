@@ -115,6 +115,29 @@ async function checkAuth() {
     const token = localStorage.getItem('authToken');
     if (!token) return;
     
+    // First try to refresh the session with Supabase
+    if (supabase) {
+        try {
+            console.log('Attempting to refresh Supabase session...');
+            const { data: { session }, error } = await supabase.auth.refreshSession();
+            
+            if (!error && session) {
+                console.log('Session refreshed successfully');
+                authToken = session.access_token;
+                currentUser = session.user;
+                localStorage.setItem('authToken', authToken);
+                localStorage.setItem('supabaseSession', JSON.stringify(session));
+                showDashboard();
+                return;
+            } else {
+                console.log('Failed to refresh session:', error);
+            }
+        } catch (refreshError) {
+            console.error('Error refreshing session:', refreshError);
+        }
+    }
+    
+    // Fallback to checking with server
     try {
         const response = await fetch(`${API_URL}/auth/me`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -126,10 +149,14 @@ async function checkAuth() {
             currentUser = data.user;
             showDashboard();
         } else {
+            console.log('Token invalid, clearing auth');
             localStorage.removeItem('authToken');
+            localStorage.removeItem('supabaseSession');
         }
     } catch (error) {
+        console.error('Auth check error:', error);
         localStorage.removeItem('authToken');
+        localStorage.removeItem('supabaseSession');
     }
 }
 
@@ -166,15 +193,42 @@ const archiveFilter = document.getElementById('archive-filter');
 // Content functions
 async function loadContent() {
     try {
+        console.log('Loading content with token:', authToken ? 'present' : 'missing');
+        
         const response = await fetch(`${API_URL}/content`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
         
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error('Failed to load content:', response.status, errorData);
+            
+            if (response.status === 401) {
+                // Token is invalid, try to refresh
+                if (supabase) {
+                    const { data: { session }, error } = await supabase.auth.refreshSession();
+                    if (!error && session) {
+                        authToken = session.access_token;
+                        localStorage.setItem('authToken', authToken);
+                        // Retry loading content with new token
+                        return loadContent();
+                    }
+                }
+                // If refresh failed, redirect to login
+                showMessage('Session expired. Please sign in again.', 'error');
+                signOut();
+                return;
+            }
+            
+            throw new Error(errorData.error || 'Failed to load content');
+        }
+        
         const data = await response.json();
-        allContent = data.content;
+        allContent = data.content || [];
         filterAndDisplayContent();
     } catch (error) {
-        contentList.innerHTML = '<p class="error">Failed to load content</p>';
+        console.error('Error loading content:', error);
+        contentList.innerHTML = `<p class="error">Failed to load content: ${error.message}</p>`;
     }
 }
 
@@ -605,6 +659,7 @@ async function handleOAuthCallback() {
                 authToken = data.session.access_token;
                 currentUser = data.user;
                 localStorage.setItem('authToken', authToken);
+                localStorage.setItem('supabaseSession', JSON.stringify(data.session));
                 
                 console.log('User authenticated via code flow:', currentUser);
                 
@@ -676,12 +731,14 @@ function initializeSupabase() {
                 authToken = session.access_token;
                 currentUser = session.user;
                 localStorage.setItem('authToken', authToken);
+                localStorage.setItem('supabaseSession', JSON.stringify(session));
                 showDashboard();
             } else if (event === 'SIGNED_OUT') {
                 console.log('User signed out via state change');
                 authToken = null;
                 currentUser = null;
                 localStorage.removeItem('authToken');
+                localStorage.removeItem('supabaseSession');
                 showAuth();
             }
         });
@@ -715,6 +772,7 @@ async function initializeApp() {
             authToken = session.access_token;
             currentUser = session.user;
             localStorage.setItem('authToken', authToken);
+            localStorage.setItem('supabaseSession', JSON.stringify(session));
             showDashboard();
             return;
         } else {
