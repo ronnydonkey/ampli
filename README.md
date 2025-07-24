@@ -1,6 +1,6 @@
 # BranchOut - Content Branching Tool for Social Media
 
-BranchOut is a web application that helps you branch out your content across multiple social media platforms. It uses AI to adapt your content for each platform's unique style and requirements.
+BranchOut is the content amplification tool that learns your authentic voice and helps you branch out across multiple social media platforms without losing your roots. It uses AI to adapt your content for each platform's unique style while maintaining your authentic voice.
 
 ## Features
 

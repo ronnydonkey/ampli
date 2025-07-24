@@ -67,9 +67,9 @@ NODE_ENV=production
 
 ### Features Available After Deployment
 
-- ✅ Landing page at your-domain.vercel.app
-- ✅ App at your-domain.vercel.app/app
-- ✅ API endpoints at your-domain.vercel.app/api/*
+- ✅ Landing page at branch-out.io
+- ✅ App at branch-out.io/app
+- ✅ API endpoints at branch-out.io/api/*
 - ✅ Static file serving
 - ✅ Serverless functions for all backend logic
 

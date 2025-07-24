@@ -170,7 +170,7 @@ module.exports = (supabase) => {
               '2. Navigate to Authentication > Providers',
               '3. Enable Google provider',
               '4. Add your Google OAuth credentials',
-              '5. Add https://ampli-seven.vercel.app to authorized redirect URLs'
+              '5. Add https://branch-out.io to authorized redirect URLs'
             ]
           });
         }

@@ -91,12 +91,12 @@ app.get('/api/debug', (req, res) => {
   });
 });
 
-console.log('🚀 Ampli Server Starting...');
+console.log('🚀 BranchOut Server Starting...');
 console.log('📊 Dashboard will be available at: http://localhost:' + PORT);
 
 try {
   const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Ampli running on port ${PORT}`);
+    console.log(`✅ BranchOut running on port ${PORT}`);
     console.log(`🔗 Open: http://localhost:${PORT}`);
   });
 

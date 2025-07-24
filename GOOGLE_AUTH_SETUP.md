@@ -18,7 +18,7 @@ To enable Google authentication in your BranchOut application, you need to confi
    - Add authorized redirect URIs:
      - `https://YOUR_SUPABASE_PROJECT_ID.supabase.co/auth/v1/callback`
      - `http://localhost:3001/api/auth/callback` (for local development)
-     - `https://your-vercel-domain.vercel.app/api/auth/callback` (for production)
+     - `https://branch-out.io/api/auth/callback` (for production)
    - Save and copy your Client ID and Client Secret
 
 ## Step 2: Configure Supabase
@@ -39,8 +39,8 @@ To enable Google authentication in your BranchOut application, you need to confi
 3. Add to "Redirect URLs":
    - `http://localhost:3001`
    - `http://localhost:3001/api/auth/callback`
-   - `https://your-vercel-domain.vercel.app`
-   - `https://your-vercel-domain.vercel.app/app`
+   - `https://branch-out.io`
+   - `https://branch-out.io/app`
 
 ## Step 4: Test the Integration
 

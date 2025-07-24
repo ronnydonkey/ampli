@@ -1,7 +1,7 @@
 {
   "name": "branchout",
   "version": "1.0.0",
-  "description": "A content branching tool for social media",
+  "description": "The content amplification tool that learns your authentic voice",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
