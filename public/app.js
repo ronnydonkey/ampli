@@ -467,7 +467,21 @@ async function signInWithGoogle() {
             const initResult = initializeSupabase();
             console.log('Reinitialize result:', initResult);
             if (!initResult) {
-                showMessage('Application not properly configured - Supabase client failed to initialize', 'error');
+                console.log('Client-side auth failed, trying server-side auth...');
+                // Fallback to server-side auth
+                try {
+                    const response = await fetch(`${API_URL}/auth/google`);
+                    const data = await response.json();
+                    if (data.url) {
+                        window.location.href = data.url;
+                        return;
+                    } else {
+                        throw new Error(data.error || 'Server auth failed');
+                    }
+                } catch (serverError) {
+                    console.error('Server-side auth also failed:', serverError);
+                    showMessage('Authentication service unavailable. Please try again later.', 'error');
+                }
                 return;
             }
         }
@@ -641,24 +655,39 @@ if (document.readyState === 'complete' || document.readyState === 'interactive')
 }
 
 function waitForSupabaseAndInit() {
-    const maxWait = 5000; // 5 seconds max
+    const maxWait = 10000; // 10 seconds max
     const startTime = Date.now();
+    let checkCount = 0;
     
     function checkSupabase() {
-        console.log('Checking for Supabase library...');
+        checkCount++;
+        console.log(`Checking for Supabase library... (attempt ${checkCount})`);
         console.log('window.supabase:', typeof window.supabase);
+        console.log('document.readyState:', document.readyState);
         
+        // Check if Supabase is available and ready
         if (typeof window.supabase !== 'undefined' && window.supabase.createClient) {
             console.log('Supabase library found, initializing app...');
             initializeApp();
-        } else if (Date.now() - startTime < maxWait) {
-            console.log('Supabase not ready, retrying in 100ms...');
-            setTimeout(checkSupabase, 100);
-        } else {
-            console.error('Timeout waiting for Supabase library to load');
-            showMessage('Failed to load authentication library. Please refresh the page.', 'error');
+            return;
         }
+        
+        // Check if we've timed out
+        if (Date.now() - startTime > maxWait) {
+            console.error('Timeout waiting for Supabase library to load');
+            console.log('Final check - window.supabase:', window.supabase);
+            console.log('Available globals:', Object.keys(window).filter(k => k.toLowerCase().includes('supabase')));
+            
+            // Try to provide helpful error message
+            showMessage('Authentication library failed to load. Please check your internet connection and refresh the page.', 'error');
+            return;
+        }
+        
+        // Continue waiting
+        console.log('Supabase not ready, retrying in 200ms...');
+        setTimeout(checkSupabase, 200);
     }
     
+    // Start checking immediately
     checkSupabase();
 }
