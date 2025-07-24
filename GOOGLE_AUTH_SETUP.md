@@ -1,6 +1,6 @@
-# Google Authentication Setup for Ampli
+# Google Authentication Setup for BranchOut
 
-To enable Google authentication in your Ampli application, you need to configure it in both Google Cloud Console and Supabase.
+To enable Google authentication in your BranchOut application, you need to configure it in both Google Cloud Console and Supabase.
 
 ## Step 1: Configure Google OAuth
 

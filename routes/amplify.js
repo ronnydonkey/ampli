@@ -1,19 +1,19 @@
 const express = require('express');
 const router = express.Router();
-const AmplifyService = require('../services/amplify');
+const BranchOutService = require('../services/amplify');
 
 module.exports = (supabase, authMiddleware) => {
-  // Initialize AmplifyService
-  let amplifyService;
+  // Initialize BranchOutService
+  let branchOutService;
   try {
     if (!process.env.ANTHROPIC_API_KEY) {
       console.error('WARNING: ANTHROPIC_API_KEY not found in environment variables');
     }
-    amplifyService = new AmplifyService(process.env.ANTHROPIC_API_KEY);
+    branchOutService = new BranchOutService(process.env.ANTHROPIC_API_KEY);
   } catch (error) {
-    console.error('ERROR: Failed to initialize AmplifyService:', error.message);
+    console.error('ERROR: Failed to initialize BranchOutService:', error.message);
     // Create a dummy service that returns errors
-    amplifyService = {
+    branchOutService = {
       amplifyContent: async () => ({ error: 'Anthropic API not configured' }),
       generateHashtags: async () => { throw new Error('Anthropic API not configured'); },
       improveContent: async () => { throw new Error('Anthropic API not configured'); },
@@ -59,7 +59,7 @@ module.exports = (supabase, authMiddleware) => {
       }
 
       // Amplify content
-      const amplifiedResults = await amplifyService.amplifyContent(
+      const amplifiedResults = await branchOutService.amplifyContent(
         content.original_content,
         activePlatforms,
         { tone, style }
@@ -116,7 +116,7 @@ module.exports = (supabase, authMiddleware) => {
         return res.status(404).json({ error: 'Content not found' });
       }
 
-      const hashtags = await amplifyService.generateHashtags(
+      const hashtags = await branchOutService.generateHashtags(
         content.original_content,
         platform,
         count
@@ -149,7 +149,7 @@ module.exports = (supabase, authMiddleware) => {
         return res.status(404).json({ error: 'Content not found' });
       }
 
-      const improvedContent = await amplifyService.improveContent(
+      const improvedContent = await branchOutService.improveContent(
         content.original_content,
         feedback
       );
@@ -175,7 +175,7 @@ module.exports = (supabase, authMiddleware) => {
         return res.status(404).json({ error: 'Content not found' });
       }
 
-      const analysis = await amplifyService.analyzeTone(content.original_content);
+      const analysis = await branchOutService.analyzeTone(content.original_content);
 
       res.json({ analysis });
     } catch (error) {

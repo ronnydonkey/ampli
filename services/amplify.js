@@ -5,7 +5,7 @@ try {
   console.error('Failed to load Anthropic SDK:', error.message);
 }
 
-class AmplifyService {
+class BranchOutService {
   constructor(apiKey) {
     if (!apiKey) {
       throw new Error('Anthropic API key is required');
@@ -163,4 +163,4 @@ Provide a JSON response with:
   }
 }
 
-module.exports = AmplifyService;
+module.exports = BranchOutService;

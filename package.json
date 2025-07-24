@@ -1,7 +1,7 @@
 {
-  "name": "ampli",
+  "name": "branchout",
   "version": "1.0.0",
-  "description": "A content amplifier for social media",
+  "description": "A content branching tool for social media",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -12,7 +12,7 @@
   },
   "keywords": [
     "social-media",
-    "content-amplifier",
+    "content-branching",
     "express",
     "supabase"
   ],

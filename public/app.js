@@ -226,9 +226,9 @@ function displayClientOnlyMode() {
     console.log('Running in client-only mode');
     contentList.innerHTML = `
         <div class="client-mode-notice">
-            <h3>🚀 Ready to Amplify Content!</h3>
-            <p>Create content above and it will be amplified using smart templates optimized for each social platform.</p>
-            <p><small>Note: Running in client-side mode. Your amplified content won't be saved to the server archive.</small></p>
+            <h3>🚀 Ready to Branch Out Content!</h3>
+            <p>Create content above and it will be branched using smart templates optimized for each social platform.</p>
+            <p><small>Note: Running in client-side mode. Your branched content won't be saved to the server archive.</small></p>
         </div>
     `;
 }
@@ -278,7 +278,7 @@ function displayContent(content) {
     
     contentList.innerHTML = content.map(item => {
         const isExpanded = expandedItems.has(item.id);
-        const hasAmplifiedContent = item.platform_posts && item.platform_posts.length > 0;
+        const hasBranchedContent = item.platform_posts && item.platform_posts.length > 0;
         
         return `
             <div class="content-item ${isExpanded ? 'expanded' : ''}" data-id="${item.id}" onclick="toggleContentItem('${item.id}')">
@@ -287,15 +287,15 @@ function displayContent(content) {
                 <div class="content-meta">
                     <span>${new Date(item.created_at).toLocaleDateString()}</span>
                     <span>${item.status}</span>
-                    ${hasAmplifiedContent ? '<span>📱 Amplified</span>' : ''}
+                    ${hasBranchedContent ? '<span>📱 Branched</span>' : ''}
                 </div>
-                ${isExpanded && hasAmplifiedContent ? renderAmplifiedVersions(item.platform_posts) : ''}
+                ${isExpanded && hasBranchedContent ? renderBranchedVersions(item.platform_posts) : ''}
             </div>
         `;
     }).join('');
 }
 
-function renderAmplifiedVersions(platformPosts) {
+function renderBranchedVersions(platformPosts) {
     const groupedPosts = platformPosts.reduce((acc, post) => {
         if (!acc[post.platform]) acc[post.platform] = [];
         acc[post.platform].push(post);
@@ -304,7 +304,7 @@ function renderAmplifiedVersions(platformPosts) {
     
     return `
         <div class="amplified-versions">
-            <h4>Amplified Versions</h4>
+            <h4>Branched Versions</h4>
             ${Object.entries(groupedPosts).map(([platform, posts]) => {
                 const latestPost = posts[0]; // Assuming posts are ordered by date
                 return `
@@ -327,32 +327,32 @@ async function createContent(title, content, platforms, tone) {
         console.log('Creating content - using client-side amplification');
         
         // Show amplification animation
-        showAmplificationAnimation(platforms);
+        showBranchingAnimation(platforms);
         
         // Add a realistic delay to make it feel like AI processing
         await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
         
         // Skip server entirely and use client-side fallback
-        console.log('Using client-side template amplification...');
-        const fallbackResults = createFallbackAmplification(content, platforms, tone);
+        console.log('Using client-side template branching...');
+        const fallbackResults = createFallbackBranching(content, platforms, tone);
         
         // Hide animation and show results
-        hideAmplificationAnimation();
-        displayAmplifiedResults(fallbackResults);
+        hideBranchingAnimation();
+        displayBranchedResults(fallbackResults);
         
         // Reset form
         contentForm.reset();
         
-        showMessage('Content amplified successfully! 🚀', 'success');
+        showMessage('Content branched successfully! 🚀', 'success');
         
     } catch (error) {
         console.error('Content creation error:', error);
-        hideAmplificationAnimation();
-        alert('Failed to amplify content: ' + error.message);
+        hideBranchingAnimation();
+        alert('Failed to branch content: ' + error.message);
     }
 }
 
-function displayAmplifiedResults(results) {
+function displayBranchedResults(results) {
     resultsSection.classList.remove('hidden');
     currentResults = results; // Store for utility functions
     
@@ -495,8 +495,8 @@ function createTwitterThread(text, suffix, tone, prefix = '') {
     return numberedThreads;
 }
 
-// Client-side fallback amplification when server is unavailable
-function createFallbackAmplification(content, platforms, tone) {
+// Client-side fallback branching when server is unavailable
+function createFallbackBranching(content, platforms, tone) {
     const results = {};
     
     const templates = {
@@ -758,14 +758,14 @@ function showToast(message) {
 }
 
 // Update the main display function
-function displayAmplifiedResults(results) {
+function displayBranchedResults(results) {
     // Use new platform cards instead of old results
     displayPlatformCards(results);
     currentResults = results;
 }
 
-// Amplification animation functions
-function showAmplificationAnimation(platforms) {
+// Branching animation functions
+function showBranchingAnimation(platforms) {
     // Hide results section and show loading animation
     resultsSection.classList.add('hidden');
     
@@ -779,7 +779,7 @@ function showAmplificationAnimation(platforms) {
                 <div class="brain-icon">🧠</div>
             </div>
             <div class="amplification-text">
-                <h3>✨ Amplifying Your Content</h3>
+                <h3>✨ Branching Your Content</h3>
                 <p id="amplification-status">Analyzing your content...</p>
                 <div class="platform-progress">
                     ${platforms.map(platform => `
@@ -802,10 +802,10 @@ function showAmplificationAnimation(platforms) {
     contentCreator.appendChild(animationContainer);
     
     // Start the animation sequence
-    startAmplificationSequence(platforms);
+    startBranchingSequence(platforms);
 }
 
-function hideAmplificationAnimation() {
+function hideBranchingAnimation() {
     const animationContainer = document.getElementById('amplification-animation');
     if (animationContainer) {
         animationContainer.remove();
@@ -822,7 +822,7 @@ function getPlatformIcon(platform) {
     return icons[platform] || '📱';
 }
 
-async function startAmplificationSequence(platforms) {
+async function startBranchingSequence(platforms) {
     const statusElement = document.getElementById('amplification-status');
     const progressFill = document.querySelector('.progress-fill');
     
@@ -973,13 +973,13 @@ contentForm.addEventListener('submit', async (e) => {
     
     const submitBtn = document.getElementById('amplify-btn');
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Amplifying...';
+    submitBtn.textContent = 'Branching...';
     
     try {
         await createContent(title, content, platforms, tone);
     } finally {
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Amplify Content';
+        submitBtn.textContent = 'Branch Content';
     }
 });
 

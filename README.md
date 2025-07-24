@@ -1,6 +1,6 @@
-# Ampli - Content Amplifier for Social Media
+# BranchOut - Content Branching Tool for Social Media
 
-Ampli is a web application that helps you amplify your content across multiple social media platforms. It uses AI to adapt your content for each platform's unique style and requirements.
+BranchOut is a web application that helps you branch out your content across multiple social media platforms. It uses AI to adapt your content for each platform's unique style and requirements.
 
 ## Features
 
@@ -48,7 +48,7 @@ Ampli is a web application that helps you amplify your content across multiple s
 5. **Access the application:**
    - Open your browser and navigate to `http://localhost:3000`
    - Create an account or sign in
-   - Start creating and amplifying your content!
+   - Start creating and branching your content!
 
 ## How to Use
 
@@ -56,7 +56,7 @@ Ampli is a web application that helps you amplify your content across multiple s
 2. **Create Content**: Enter your original content in the text area
 3. **Select Platforms**: Choose which social media platforms you want to target
 4. **Choose Tone**: Select the appropriate tone for your content
-5. **Amplify**: Click "Amplify Content" to generate platform-specific versions
+5. **Branch Out**: Click "Branch Content" to generate platform-specific versions
 6. **Copy/Download**: Use the copy or download buttons to save the adapted content
 7. **Manage Content**: View all your created content in the "Your Content" section
 
@@ -70,7 +70,7 @@ Ampli is a web application that helps you amplify your content across multiple s
 - `POST /api/content` - Create new content
 - `PUT /api/content/:id` - Update content
 - `DELETE /api/content/:id` - Delete content
-- `POST /api/amplify/:contentId/amplify` - Amplify content for platforms
+- `POST /api/amplify/:contentId/amplify` - Branch content for platforms
 - `POST /api/amplify/:contentId/hashtags` - Generate hashtags
 - `POST /api/amplify/:contentId/improve` - Improve content based on feedback
 - `GET /api/amplify/:contentId/analyze` - Analyze content tone

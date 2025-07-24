@@ -1,8 +1,8 @@
-# Deployment Guide for Ampli
+# Deployment Guide for BranchOut
 
 ## Vercel Deployment
 
-Your Ampli project is configured for Vercel deployment with serverless functions.
+Your BranchOut project is configured for Vercel deployment with serverless functions.
 
 ### Prerequisites
 1. Vercel account (sign up at vercel.com)
