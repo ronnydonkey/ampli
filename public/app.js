@@ -554,58 +554,8 @@ function createFallbackBranching(content, platforms, tone) {
 function initializeHeroAnimation() {
     const heroAnimation = document.getElementById('hero-animation');
     
-    heroAnimation.innerHTML = `
-        <div class="value-demonstration">
-            <div class="input-example">
-                <div class="input-card glassmorphic-mini">
-                    <div class="input-header">Your Idea</div>
-                    <div class="input-content">Just launched my app after months of building...</div>
-                </div>
-            </div>
-            
-            <div class="transformation-arrow">
-                <div class="arrow-line"></div>
-                <div class="arrow-head">→</div>
-                <div class="magic-sparkles">✨</div>
-            </div>
-            
-            <div class="output-examples">
-                <div class="platform-preview-card glassmorphic-mini twitter" data-platform="twitter">
-                    <div class="platform-header">
-                        <span class="platform-icon">🐦</span>
-                        <span>Twitter</span>
-                    </div>
-                    <div class="preview-content">Just launched my app after months of that classic founder cycle: brilliant idea → obsessive building → crippling self-doubt...</div>
-                </div>
-                
-                <div class="platform-preview-card glassmorphic-mini linkedin" data-platform="linkedin">
-                    <div class="platform-header">
-                        <span class="platform-icon">💼</span>
-                        <span>LinkedIn</span>
-                    </div>
-                    <div class="preview-content">After months of development, I've learned something crucial about bringing ideas to market. The perfectionist's paradox is real...</div>
-                </div>
-                
-                <div class="platform-preview-card glassmorphic-mini instagram" data-platform="instagram">
-                    <div class="platform-header">
-                        <span class="platform-icon">📸</span>
-                        <span>Instagram</span>
-                    </div>
-                    <div class="preview-content">Plot twist: The hardest part isn't building—it's convincing yourself it's ready 🎯 After months of pushing my app up the mountain...</div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Animate the cards
-    setTimeout(() => {
-        const cards = heroAnimation.querySelectorAll('.platform-preview-card');
-        cards.forEach((card, index) => {
-            setTimeout(() => {
-                card.classList.add('animate-in');
-            }, index * 200);
-        });
-    }, 1000);
+    // Empty the hero animation container
+    heroAnimation.innerHTML = '';
 }
 
 // Platform Cards Display Functions
