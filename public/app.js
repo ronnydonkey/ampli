@@ -367,6 +367,7 @@ function displayAmplifiedResults(results) {
             <div class="platform-result">
                 <h3>${platform.charAt(0).toUpperCase() + platform.slice(1)}</h3>
                 <div class="adapted-content">${result.adaptedContent}</div>
+                ${platform === 'twitter' ? `<div class="twitter-counter">Characters: ${result.adaptedContent.length}/280</div>` : ''}
                 <div class="result-actions">
                     <button onclick="copyContent('${platform}')">Copy</button>
                     <button onclick="downloadContent('${platform}')">Download</button>
@@ -378,6 +379,69 @@ function displayAmplifiedResults(results) {
 
 // Store results globally for utility functions
 let currentResults = {};
+
+// Twitter character limit handler
+function formatTwitterPost(text, suffix, tone) {
+    const TWITTER_LIMIT = 280;
+    const ELLIPSIS = '...';
+    
+    // Calculate available space for main content
+    let availableSpace = TWITTER_LIMIT - suffix.length;
+    
+    // Add space for ellipsis if needed
+    if (text.length > availableSpace) {
+        availableSpace -= ELLIPSIS.length;
+    }
+    
+    // Handle different tones with prefixes
+    let prefix = '';
+    if (tone === 'urgent') {
+        prefix = '🚨 ';
+        availableSpace -= prefix.length;
+    } else if (tone === 'inspirational') {
+        prefix = '✨ ';
+        availableSpace -= prefix.length;
+    }
+    
+    // Ensure we don't cut off mid-word
+    let truncatedText = text;
+    if (text.length > availableSpace) {
+        // Find the last complete word that fits
+        truncatedText = text.substring(0, availableSpace);
+        const lastSpaceIndex = truncatedText.lastIndexOf(' ');
+        if (lastSpaceIndex > availableSpace * 0.7) { // Only cut at word boundary if it's not too short
+            truncatedText = truncatedText.substring(0, lastSpaceIndex);
+        }
+        truncatedText += ELLIPSIS;
+    }
+    
+    // Construct final tweet
+    let finalTweet = prefix + truncatedText;
+    
+    // Add suffix with proper spacing
+    if (suffix && suffix.trim()) {
+        if (tone === 'casual' || tone === 'friendly') {
+            finalTweet += ' ' + suffix;
+        } else {
+            finalTweet += '\n\n' + suffix;
+        }
+    }
+    
+    // Final safety check - if somehow still over limit, trim more aggressively
+    if (finalTweet.length > TWITTER_LIMIT) {
+        const overage = finalTweet.length - TWITTER_LIMIT;
+        const textPart = prefix + truncatedText;
+        const newTextLength = textPart.length - overage - ELLIPSIS.length;
+        if (newTextLength > 50) { // Ensure minimum readable length
+            finalTweet = prefix + text.substring(0, newTextLength) + ELLIPSIS;
+            if (suffix && suffix.trim()) {
+                finalTweet += (tone === 'casual' || tone === 'friendly') ? ' ' + suffix : '\n\n' + suffix;
+            }
+        }
+    }
+    
+    return finalTweet;
+}
 
 // Client-side fallback amplification when server is unavailable
 function createFallbackAmplification(content, platforms, tone) {
@@ -399,11 +463,11 @@ function createFallbackAmplification(content, platforms, tone) {
             inspirational: (text) => `${text}\n\nSuccess isn't just about the destination—it's about the journey and the lessons we learn along the way.\n\n#motivation #inspiration #leadership #success #growth`
         },
         twitter: {
-            professional: (text) => text.length > 240 ? `${text.substring(0, 240)}...\n\n#business #professional` : `${text}\n\n#business #professional #growth`,
-            casual: (text) => text.length > 260 ? `${text.substring(0, 260)}...` : `${text} 😊`,
-            friendly: (text) => text.length > 250 ? `${text.substring(0, 250)}... 👋` : `${text} 👋 What do you think?`,
-            urgent: (text) => text.length > 240 ? `🚨 ${text.substring(0, 235)}...` : `🚨 ${text} Please RT!`,
-            inspirational: (text) => text.length > 240 ? `✨ ${text.substring(0, 235)}... ✨` : `✨ ${text} ✨\n\n#motivation #inspiration`
+            professional: (text) => formatTwitterPost(text, '#business #professional #growth', 'professional'),
+            casual: (text) => formatTwitterPost(text, '😊', 'casual'),
+            friendly: (text) => formatTwitterPost(text, '👋 What do you think?', 'friendly'),
+            urgent: (text) => formatTwitterPost(text, 'Please RT! 🚨', 'urgent'),
+            inspirational: (text) => formatTwitterPost(text, '#motivation #inspiration ✨', 'inspirational')
         },
         facebook: {
             professional: (text) => `${text}\n\nI'd love to start a discussion about this topic. What are your thoughts and experiences? Please share in the comments below.`,

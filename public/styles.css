@@ -419,6 +419,17 @@ h2 {
     border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
+.twitter-counter {
+    font-size: 0.875rem;
+    color: #666;
+    margin: 0.5rem 0;
+    padding: 0.25rem 0.5rem;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid #1DA1F2;
+    font-family: monospace;
+}
+
 .result-actions {
     display: flex;
     gap: 0.75rem;
