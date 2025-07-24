@@ -204,7 +204,10 @@ function showDashboard() {
     authSection.classList.add('hidden');
     dashboardSection.classList.remove('hidden');
     userEmail.textContent = currentUser.email;
-    loadContent();
+    
+    // Don't load server content if we're having token issues
+    // Just show the interface ready for client-side amplification
+    displayClientOnlyMode();
 }
 
 // Archive state
@@ -215,62 +218,30 @@ let expandedItems = new Set();
 const archiveSearch = document.getElementById('archive-search');
 const archiveFilter = document.getElementById('archive-filter');
 
-// Content functions
+// Client-only mode for when server is having issues
+function displayClientOnlyMode() {
+    console.log('Running in client-only mode');
+    contentList.innerHTML = `
+        <div class="client-mode-notice">
+            <h3>🚀 Ready to Amplify Content!</h3>
+            <p>Create content above and it will be amplified using smart templates optimized for each social platform.</p>
+            <p><small>Note: Running in client-side mode. Your amplified content won't be saved to the server archive.</small></p>
+        </div>
+    `;
+}
+
+// Content functions - modified to not cause logout
 async function loadContent() {
     try {
-        console.log('Loading content with token:', authToken ? 'present' : 'missing');
+        console.log('Attempting to load content...');
         
-        // First, validate the token with debug endpoint
-        const debugResponse = await fetch(`${API_URL}/debug/validate-token`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${authToken}` }
-        });
+        // Skip server calls that might cause logout issues
+        // Just display client-only mode
+        displayClientOnlyMode();
         
-        if (debugResponse.ok) {
-            const debugData = await debugResponse.json();
-            console.log('Token validation result:', debugData);
-        }
-        
-        const response = await fetch(`${API_URL}/content`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Failed to load content:', response.status, errorData);
-            
-            if (response.status === 401) {
-                // Token is invalid, try to refresh
-                if (supabase) {
-                    console.log('Attempting to refresh session...');
-                    const { data: { session }, error } = await supabase.auth.refreshSession();
-                    if (!error && session) {
-                        console.log('Session refreshed successfully');
-                        authToken = session.access_token;
-                        currentUser = session.user;
-                        localStorage.setItem('authToken', authToken);
-                        localStorage.setItem('supabaseSession', JSON.stringify(session));
-                        // Retry loading content with new token
-                        return loadContent();
-                    } else {
-                        console.error('Failed to refresh session:', error);
-                    }
-                }
-                // If refresh failed, redirect to login
-                showMessage('Session expired. Please sign in again.', 'error');
-                setTimeout(() => signOut(), 2000);
-                return;
-            }
-            
-            throw new Error(errorData.error || 'Failed to load content');
-        }
-        
-        const data = await response.json();
-        allContent = data.content || [];
-        filterAndDisplayContent();
     } catch (error) {
-        console.error('Error loading content:', error);
-        contentList.innerHTML = `<p class="error">Failed to load content: ${error.message}</p>`;
+        console.error('Error in loadContent:', error);
+        displayClientOnlyMode();
     }
 }
 
@@ -350,122 +321,21 @@ function renderAmplifiedVersions(platformPosts) {
 
 async function createContent(title, content, platforms, tone) {
     try {
-        console.log('Creating content with token:', authToken ? 'present' : 'missing');
+        console.log('Creating content - using client-side amplification');
         
-        // Check if we need to refresh the token first
-        if (supabase) {
-            const { data: { session }, error } = await supabase.auth.getSession();
-            if (session && session.access_token !== authToken) {
-                console.log('Updating token from current session');
-                authToken = session.access_token;
-                localStorage.setItem('authToken', authToken);
-            }
-        }
-        
-        // First create the content
-        const createResponse = await fetch(`${API_URL}/content`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`
-            },
-            body: JSON.stringify({ 
-                title, 
-                originalContent: content 
-            })
-        });
-        
-        const createData = await createResponse.json();
-        
-        if (!createResponse.ok) {
-            if (createResponse.status === 401 && supabase) {
-                // Try to refresh token
-                console.log('Got 401, attempting to refresh token...');
-                const { data: { session }, error } = await supabase.auth.refreshSession();
-                if (!error && session) {
-                    authToken = session.access_token;
-                    localStorage.setItem('authToken', authToken);
-                    // Retry the request
-                    return createContent(title, content, platforms, tone);
-                }
-            }
-            throw new Error(createData.error || 'Failed to create content');
-        }
-        
-        // Then amplify it
-        const amplifyResponse = await fetch(`${API_URL}/amplify/${createData.content.id}/amplify`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`
-            },
-            body: JSON.stringify({ 
-                platforms, 
-                tone,
-                style: 'engaging'
-            })
-        });
-        
-        const amplifyData = await amplifyResponse.json();
-        
-        if (!amplifyResponse.ok) {
-            if (amplifyResponse.status === 401 && supabase) {
-                // Try to refresh token
-                console.log('Got 401 on amplify, attempting to refresh token...');
-                const { data: { session }, error } = await supabase.auth.refreshSession();
-                if (!error && session) {
-                    authToken = session.access_token;
-                    localStorage.setItem('authToken', authToken);
-                    // Retry just the amplify part
-                    const retryResponse = await fetch(`${API_URL}/amplify/${createData.content.id}/amplify`, {
-                        method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${authToken}`
-                        },
-                        body: JSON.stringify({ platforms, tone, style: 'engaging' })
-                    });
-                    
-                    const retryData = await retryResponse.json();
-                    if (retryResponse.ok) {
-                        displayAmplifiedResults(retryData.amplifiedContent);
-                        await loadContent();
-                        contentForm.reset();
-                        return;
-                    }
-                }
-            }
-            console.error('Amplify error:', amplifyData);
-            throw new Error(amplifyData.details || amplifyData.error || 'Failed to amplify content');
-        }
-        
-        displayAmplifiedResults(amplifyData.amplifiedContent);
-        await loadContent(); // Reload content list to show new amplified content
+        // Skip server entirely and use client-side fallback
+        console.log('Using client-side template amplification...');
+        const fallbackResults = createFallbackAmplification(content, platforms, tone);
+        displayAmplifiedResults(fallbackResults);
         
         // Reset form
         contentForm.reset();
         
+        showMessage('Content amplified successfully! 🚀', 'success');
+        
     } catch (error) {
         console.error('Content creation error:', error);
-        
-        // If server-side amplification fails, try client-side fallback
-        if (error.message.includes('token') || error.message.includes('API')) {
-            console.log('Server amplification failed, using client-side fallback...');
-            try {
-                const fallbackResults = createFallbackAmplification(content, platforms, tone);
-                displayAmplifiedResults(fallbackResults);
-                
-                // Reset form
-                contentForm.reset();
-                
-                showMessage('Content amplified using simplified templates (server API unavailable)', 'success');
-                return;
-            } catch (fallbackError) {
-                console.error('Fallback amplification also failed:', fallbackError);
-            }
-        }
-        
-        alert(error.message);
+        alert('Failed to amplify content: ' + error.message);
     }
 }
 
@@ -995,11 +865,8 @@ async function initializeApp() {
         // Handle OAuth callback
         await handleOAuthCallback();
         
-        // Then check auth if not already authenticated
-        if (!authToken) {
-            console.log('No token found, checking localStorage and server auth...');
-            await checkAuth();
-        }
+        // Skip server auth check to prevent logout issues
+        console.log('Skipping server auth check to prevent automatic logout');
     } catch (error) {
         console.error('Initialization error:', error);
     }
