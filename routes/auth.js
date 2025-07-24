@@ -157,7 +157,7 @@ module.exports = (supabase) => {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${req.protocol}://${req.get('host')}/api/auth/callback`
+          redirectTo: `${req.protocol}://${req.get('host')}/app`
         }
       });
 
