@@ -455,23 +455,34 @@ if (archiveFilter) {
     archiveFilter.addEventListener('change', filterAndDisplayContent);
 }
 
-// Google Auth
+// Google Auth - Client-side flow
 async function signInWithGoogle() {
     try {
-        const response = await fetch(`${API_URL}/auth/google`);
-        const data = await response.json();
-        
-        if (!response.ok) {
-            if (data.setupInstructions) {
-                const message = data.error + '\n\n' + data.setupInstructions.join('\n');
-                alert(message);
-                return;
-            }
-            throw new Error(data.error || 'Failed to get Google auth URL');
+        // Make sure supabase is initialized
+        if (!supabase) {
+            console.error('Supabase not initialized');
+            showMessage('Application not properly configured', 'error');
+            return;
         }
         
-        // Redirect to Google OAuth
-        window.location.href = data.url;
+        // Direct client-side OAuth with Supabase
+        const { data, error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.origin + '/app'
+            }
+        });
+        
+        if (error) {
+            console.error('Google auth error:', error);
+            if (error.message.includes('provider is not enabled')) {
+                showMessage('Google authentication is not configured. Please contact support.', 'error');
+            } else {
+                showMessage('Failed to initiate Google sign in: ' + error.message, 'error');
+            }
+        }
+        
+        // No need to redirect manually - Supabase handles it
     } catch (error) {
         console.error('Google auth error:', error);
         showMessage('Failed to initiate Google sign in', 'error');
