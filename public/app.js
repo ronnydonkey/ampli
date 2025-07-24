@@ -447,6 +447,24 @@ async function createContent(title, content, platforms, tone) {
         
     } catch (error) {
         console.error('Content creation error:', error);
+        
+        // If server-side amplification fails, try client-side fallback
+        if (error.message.includes('token') || error.message.includes('API')) {
+            console.log('Server amplification failed, using client-side fallback...');
+            try {
+                const fallbackResults = createFallbackAmplification(content, platforms, tone);
+                displayAmplifiedResults(fallbackResults);
+                
+                // Reset form
+                contentForm.reset();
+                
+                showMessage('Content amplified using simplified templates (server API unavailable)', 'success');
+                return;
+            } catch (fallbackError) {
+                console.error('Fallback amplification also failed:', fallbackError);
+            }
+        }
+        
         alert(error.message);
     }
 }
@@ -480,6 +498,61 @@ function displayAmplifiedResults(results) {
 
 // Store results globally for utility functions
 let currentResults = {};
+
+// Client-side fallback amplification when server is unavailable
+function createFallbackAmplification(content, platforms, tone) {
+    const results = {};
+    
+    const templates = {
+        instagram: {
+            professional: (text) => `${text}\n\n📈 What are your thoughts on this? Share in the comments!\n\n#business #professional #growth #motivation #success`,
+            casual: (text) => `${text} 😊\n\nWhat do you think? Let me know! 👇\n\n#daily #life #thoughts #community #share`,
+            friendly: (text) => `Hey everyone! 👋\n\n${text}\n\nLove to hear your thoughts! 💭\n\n#friends #community #discussion #thoughts #share`,
+            urgent: (text) => `🚨 IMPORTANT: ${text}\n\nPlease share this with others! 🔄\n\n#urgent #important #share #community #action`,
+            inspirational: (text) => `✨ ${text} ✨\n\nBelieve in yourself and keep pushing forward! 💪\n\n#motivation #inspiration #success #growth #mindset`
+        },
+        linkedin: {
+            professional: (text) => `${text}\n\nI'd love to hear your perspectives on this topic. What has been your experience?\n\n#business #professional #leadership #strategy #growth`,
+            casual: (text) => `${text}\n\nWhat are your thoughts on this? I'm curious to hear different viewpoints from my network.\n\n#discussion #networking #thoughts #community`,
+            friendly: (text) => `${text}\n\nI'd appreciate hearing from my network - what's been your experience with this?\n\n#networking #community #discussion #insights`,
+            urgent: (text) => `Important update: ${text}\n\nThis is time-sensitive information that could impact our industry. Please share your thoughts.\n\n#urgent #industry #update #business`,
+            inspirational: (text) => `${text}\n\nSuccess isn't just about the destination—it's about the journey and the lessons we learn along the way.\n\n#motivation #inspiration #leadership #success #growth`
+        },
+        twitter: {
+            professional: (text) => text.length > 240 ? `${text.substring(0, 240)}...\n\n#business #professional` : `${text}\n\n#business #professional #growth`,
+            casual: (text) => text.length > 260 ? `${text.substring(0, 260)}...` : `${text} 😊`,
+            friendly: (text) => text.length > 250 ? `${text.substring(0, 250)}... 👋` : `${text} 👋 What do you think?`,
+            urgent: (text) => text.length > 240 ? `🚨 ${text.substring(0, 235)}...` : `🚨 ${text} Please RT!`,
+            inspirational: (text) => text.length > 240 ? `✨ ${text.substring(0, 235)}... ✨` : `✨ ${text} ✨\n\n#motivation #inspiration`
+        },
+        facebook: {
+            professional: (text) => `${text}\n\nI'd love to start a discussion about this topic. What are your thoughts and experiences? Please share in the comments below.`,
+            casual: (text) => `${text}\n\nWhat do you all think about this? I'm really curious to hear different perspectives! Drop your thoughts in the comments 😊`,
+            friendly: (text) => `Hey friends! 👋\n\n${text}\n\nI'd love to hear what you think about this! Comment below and let's have a great discussion! 💬`,
+            urgent: (text) => `IMPORTANT UPDATE: ${text}\n\nThis is time-sensitive information. Please share this post to help spread awareness! Thank you! 🙏`,
+            inspirational: (text) => `${text}\n\nRemember, every challenge is an opportunity to grow stronger. Keep pushing forward and believe in yourself! What motivates you to keep going? Share below! 💪✨`
+        }
+    };
+    
+    platforms.forEach(platform => {
+        if (templates[platform] && templates[platform][tone]) {
+            results[platform] = {
+                adaptedContent: templates[platform][tone](content),
+                platform: platform,
+                status: 'success'
+            };
+        } else {
+            // Generic fallback
+            results[platform] = {
+                adaptedContent: `${content}\n\n#${platform} #content #social`,
+                platform: platform,
+                status: 'success'
+            };
+        }
+    });
+    
+    return results;
+}
 
 // Utility functions
 window.copyContent = function(platform) {

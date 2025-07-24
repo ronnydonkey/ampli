@@ -18,6 +18,15 @@ let supabase = null;
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://dgihdtivvoqczspgxlil.supabase.co';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnaWhkdGl2dm9xY3pzcGd4bGlsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxOTM2MzAsImV4cCI6MjA2ODc2OTYzMH0.YBxjpZQGiUds-1V8jRQXzWD63OyJyY_kJfIX3NOeuYI';
 
+// Set environment variables for other services
+process.env.SUPABASE_URL = SUPABASE_URL;
+process.env.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
+
+// Add Anthropic API key if not present
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.log('⚠️  ANTHROPIC_API_KEY not found in environment, content amplification will be disabled');
+}
+
 if (SUPABASE_URL && SUPABASE_ANON_KEY) {
   supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   console.log('✅ Supabase client initialized');
