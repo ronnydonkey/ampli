@@ -205,8 +205,6 @@ function showDashboard() {
     dashboardSection.classList.remove('hidden');
     userEmail.textContent = currentUser.email;
     
-    // Initialize hero animation
-    initializeHeroAnimation();
     
     // Don't load server content if we're having token issues
     // Just show the interface ready for client-side amplification
@@ -550,13 +548,6 @@ function createFallbackBranching(content, platforms, tone) {
     return results;
 }
 
-// Hero Animation Functions
-function initializeHeroAnimation() {
-    const heroAnimation = document.getElementById('hero-animation');
-    
-    // Empty the hero animation container
-    heroAnimation.innerHTML = '';
-}
 
 // Platform Cards Display Functions
 function displayPlatformCards(results) {
