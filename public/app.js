@@ -323,9 +323,18 @@ async function createContent(title, content, platforms, tone) {
     try {
         console.log('Creating content - using client-side amplification');
         
+        // Show amplification animation
+        showAmplificationAnimation(platforms);
+        
+        // Add a realistic delay to make it feel like AI processing
+        await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+        
         // Skip server entirely and use client-side fallback
         console.log('Using client-side template amplification...');
         const fallbackResults = createFallbackAmplification(content, platforms, tone);
+        
+        // Hide animation and show results
+        hideAmplificationAnimation();
         displayAmplifiedResults(fallbackResults);
         
         // Reset form
@@ -335,6 +344,7 @@ async function createContent(title, content, platforms, tone) {
         
     } catch (error) {
         console.error('Content creation error:', error);
+        hideAmplificationAnimation();
         alert('Failed to amplify content: ' + error.message);
     }
 }
@@ -422,6 +432,104 @@ function createFallbackAmplification(content, platforms, tone) {
     });
     
     return results;
+}
+
+// Amplification animation functions
+function showAmplificationAnimation(platforms) {
+    // Hide results section and show loading animation
+    resultsSection.classList.add('hidden');
+    
+    // Create animation container
+    const animationContainer = document.createElement('div');
+    animationContainer.id = 'amplification-animation';
+    animationContainer.innerHTML = `
+        <div class="amplification-loader">
+            <div class="ai-brain">
+                <div class="brain-pulse"></div>
+                <div class="brain-icon">🧠</div>
+            </div>
+            <div class="amplification-text">
+                <h3>✨ Amplifying Your Content</h3>
+                <p id="amplification-status">Analyzing your content...</p>
+                <div class="platform-progress">
+                    ${platforms.map(platform => `
+                        <div class="platform-item" data-platform="${platform}">
+                            <div class="platform-icon">${getPlatformIcon(platform)}</div>
+                            <div class="platform-name">${platform.charAt(0).toUpperCase() + platform.slice(1)}</div>
+                            <div class="platform-spinner"></div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Insert after the form
+    const contentCreator = document.querySelector('.content-creator');
+    contentCreator.appendChild(animationContainer);
+    
+    // Start the animation sequence
+    startAmplificationSequence(platforms);
+}
+
+function hideAmplificationAnimation() {
+    const animationContainer = document.getElementById('amplification-animation');
+    if (animationContainer) {
+        animationContainer.remove();
+    }
+}
+
+function getPlatformIcon(platform) {
+    const icons = {
+        instagram: '📸',
+        linkedin: '💼',
+        twitter: '🐦',
+        facebook: '👥'
+    };
+    return icons[platform] || '📱';
+}
+
+async function startAmplificationSequence(platforms) {
+    const statusElement = document.getElementById('amplification-status');
+    const progressFill = document.querySelector('.progress-fill');
+    
+    const steps = [
+        'Analyzing your content...',
+        'Understanding tone and context...',
+        'Optimizing for each platform...',
+        'Adding engaging elements...',
+        'Finalizing amplified versions...'
+    ];
+    
+    for (let i = 0; i < steps.length; i++) {
+        if (statusElement) {
+            statusElement.textContent = steps[i];
+        }
+        
+        if (progressFill) {
+            progressFill.style.width = `${((i + 1) / steps.length) * 100}%`;
+        }
+        
+        // Animate platform items progressively
+        if (i >= 2) { // Start platform animation after step 2
+            const platformIndex = i - 2;
+            if (platformIndex < platforms.length) {
+                const platformItem = document.querySelector(`[data-platform="${platforms[platformIndex]}"]`);
+                if (platformItem) {
+                    platformItem.classList.add('processing');
+                    setTimeout(() => {
+                        platformItem.classList.remove('processing');
+                        platformItem.classList.add('completed');
+                    }, 400);
+                }
+            }
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
 }
 
 // Utility functions
