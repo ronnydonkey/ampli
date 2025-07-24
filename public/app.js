@@ -458,36 +458,56 @@ if (archiveFilter) {
 // Google Auth - Client-side flow
 async function signInWithGoogle() {
     try {
+        console.log('Google sign-in button clicked');
+        console.log('Current supabase client:', supabase);
+        
         // Make sure supabase is initialized
         if (!supabase) {
             console.error('Supabase not initialized, attempting to reinitialize...');
-            if (!initializeSupabase()) {
+            const initResult = initializeSupabase();
+            console.log('Reinitialize result:', initResult);
+            if (!initResult) {
                 showMessage('Application not properly configured - Supabase client failed to initialize', 'error');
                 return;
             }
         }
         
+        console.log('Supabase client available, attempting OAuth...');
+        console.log('supabase.auth methods:', Object.keys(supabase.auth));
+        
         // Direct client-side OAuth with Supabase
-        const { data, error } = await supabase.auth.signInWithOAuth({
+        const oauthOptions = {
             provider: 'google',
             options: {
-                redirectTo: window.location.origin + '/app'
+                redirectTo: window.location.origin
             }
-        });
+        };
+        
+        console.log('OAuth options:', oauthOptions);
+        
+        const { data, error } = await supabase.auth.signInWithOAuth(oauthOptions);
+        
+        console.log('OAuth response data:', data);
+        console.log('OAuth response error:', error);
         
         if (error) {
             console.error('Google auth error:', error);
             if (error.message.includes('provider is not enabled')) {
                 showMessage('Google authentication is not configured. Please contact support.', 'error');
+            } else if (error.message.includes('Invalid login credentials')) {
+                showMessage('Google authentication failed. Please try again.', 'error');
             } else {
                 showMessage('Failed to initiate Google sign in: ' + error.message, 'error');
             }
+        } else {
+            console.log('OAuth initiated successfully, should redirect soon...');
         }
         
         // No need to redirect manually - Supabase handles it
     } catch (error) {
         console.error('Google auth error:', error);
-        showMessage('Failed to initiate Google sign in', 'error');
+        console.error('Error details:', error.message, error.stack);
+        showMessage('Failed to initiate Google sign in: ' + error.message, 'error');
     }
 }
 
@@ -544,21 +564,45 @@ let supabase = null;
 
 function initializeSupabase() {
     try {
+        console.log('Attempting to initialize Supabase...');
+        console.log('window.supabase available:', typeof window.supabase);
+        console.log('window.supabase object:', window.supabase);
+        
         // Check if Supabase library is loaded
         if (typeof window.supabase === 'undefined') {
-            console.error('Supabase library not loaded');
+            console.error('Supabase library not loaded - window.supabase is undefined');
+            return false;
+        }
+        
+        if (typeof window.supabase.createClient !== 'function') {
+            console.error('Supabase createClient method not available');
+            console.log('Available methods:', Object.keys(window.supabase));
             return false;
         }
         
         // Initialize with production credentials directly
-        supabase = window.supabase.createClient(
-            'https://dgihdtivvoqczspgxlil.supabase.co',
-            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnaWhkdGl2dm9xY3pzcGd4bGlsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxOTM2MzAsImV4cCI6MjA2ODc2OTYzMH0.YBxjpZQGiUds-1V8jRQXzWD63OyJyY_kJfIX3NOeuYI'
-        );
+        const supabaseUrl = 'https://dgihdtivvoqczspgxlil.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnaWhkdGl2dm9xY3pzcGd4bGlsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxOTM2MzAsImV4cCI6MjA2ODc2OTYzMH0.YBxjpZQGiUds-1V8jRQXzWD63OyJyY_kJfIX3NOeuYI';
+        
+        console.log('Creating client with URL:', supabaseUrl);
+        console.log('Using key (first 20 chars):', supabaseKey.substring(0, 20) + '...');
+        
+        supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+        
+        console.log('Supabase client created:', supabase);
+        console.log('Supabase client type:', typeof supabase);
+        console.log('Supabase auth available:', typeof supabase.auth);
+        
+        if (!supabase.auth) {
+            console.error('Supabase auth object not available');
+            return false;
+        }
+        
         console.log('Supabase client initialized successfully');
         return true;
     } catch (error) {
         console.error('Failed to initialize Supabase:', error);
+        console.error('Error stack:', error.stack);
         return false;
     }
 }
@@ -585,11 +629,36 @@ async function initializeApp() {
 
 // Initialize app when page loads
 document.addEventListener('DOMContentLoaded', function() {
-    // Small delay to ensure Supabase library is loaded
-    setTimeout(initializeApp, 100);
+    console.log('DOM loaded, attempting to initialize app...');
+    // Wait for Supabase library to load
+    waitForSupabaseAndInit();
 });
 
 // Fallback initialization
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    setTimeout(initializeApp, 100);
+    console.log('Page already loaded, attempting to initialize app...');
+    waitForSupabaseAndInit();
+}
+
+function waitForSupabaseAndInit() {
+    const maxWait = 5000; // 5 seconds max
+    const startTime = Date.now();
+    
+    function checkSupabase() {
+        console.log('Checking for Supabase library...');
+        console.log('window.supabase:', typeof window.supabase);
+        
+        if (typeof window.supabase !== 'undefined' && window.supabase.createClient) {
+            console.log('Supabase library found, initializing app...');
+            initializeApp();
+        } else if (Date.now() - startTime < maxWait) {
+            console.log('Supabase not ready, retrying in 100ms...');
+            setTimeout(checkSupabase, 100);
+        } else {
+            console.error('Timeout waiting for Supabase library to load');
+            showMessage('Failed to load authentication library. Please refresh the page.', 'error');
+        }
+    }
+    
+    checkSupabase();
 }
