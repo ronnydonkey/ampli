@@ -545,6 +545,11 @@ async function initializeApp() {
         // Fetch config
         console.log('Fetching config from:', `${API_URL}/config`);
         const configResponse = await fetch(`${API_URL}/config`);
+        
+        if (!configResponse.ok) {
+            throw new Error(`Config fetch failed: ${configResponse.status}`);
+        }
+        
         const config = await configResponse.json();
         console.log('Config received:', config);
         
@@ -555,7 +560,15 @@ async function initializeApp() {
             );
             console.log('Supabase client initialized');
         } else {
-            console.error('Missing Supabase config');
+            console.error('Missing Supabase config:', config);
+            // Fallback to hardcoded values for production
+            if (window.location.hostname !== 'localhost') {
+                supabase = window.supabase.createClient(
+                    'https://dgihdtivvoqczspgxlil.supabase.co',
+                    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnaWhkdGl2dm9xY3pzcGd4bGlsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxOTM2MzAsImV4cCI6MjA2ODc2OTYzMH0.YBxjpZQGiUds-1V8jRQXzWD63OyJyY_kJfIX3NOeuYI'
+                );
+                console.log('Supabase client initialized with fallback config');
+            }
         }
         
         // Handle OAuth callback first
