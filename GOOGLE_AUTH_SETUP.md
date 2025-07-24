@@ -18,6 +18,7 @@ To enable Google authentication in your Ampli application, you need to configure
    - Add authorized redirect URIs:
      - `https://YOUR_SUPABASE_PROJECT_ID.supabase.co/auth/v1/callback`
      - `http://localhost:3001/api/auth/callback` (for local development)
+     - `https://your-vercel-domain.vercel.app/api/auth/callback` (for production)
    - Save and copy your Client ID and Client Secret
 
 ## Step 2: Configure Supabase
@@ -38,7 +39,8 @@ To enable Google authentication in your Ampli application, you need to configure
 3. Add to "Redirect URLs":
    - `http://localhost:3001`
    - `http://localhost:3001/api/auth/callback`
-   - Your production URLs when deploying
+   - `https://your-vercel-domain.vercel.app`
+   - `https://your-vercel-domain.vercel.app/app`
 
 ## Step 4: Test the Integration
 
