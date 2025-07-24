@@ -325,6 +325,18 @@ function renderAmplifiedVersions(platformPosts) {
 
 async function createContent(title, content, platforms, tone) {
     try {
+        console.log('Creating content with token:', authToken ? 'present' : 'missing');
+        
+        // Check if we need to refresh the token first
+        if (supabase) {
+            const { data: { session }, error } = await supabase.auth.getSession();
+            if (session && session.access_token !== authToken) {
+                console.log('Updating token from current session');
+                authToken = session.access_token;
+                localStorage.setItem('authToken', authToken);
+            }
+        }
+        
         // First create the content
         const createResponse = await fetch(`${API_URL}/content`, {
             method: 'POST',
@@ -341,6 +353,17 @@ async function createContent(title, content, platforms, tone) {
         const createData = await createResponse.json();
         
         if (!createResponse.ok) {
+            if (createResponse.status === 401 && supabase) {
+                // Try to refresh token
+                console.log('Got 401, attempting to refresh token...');
+                const { data: { session }, error } = await supabase.auth.refreshSession();
+                if (!error && session) {
+                    authToken = session.access_token;
+                    localStorage.setItem('authToken', authToken);
+                    // Retry the request
+                    return createContent(title, content, platforms, tone);
+                }
+            }
             throw new Error(createData.error || 'Failed to create content');
         }
         
@@ -361,6 +384,32 @@ async function createContent(title, content, platforms, tone) {
         const amplifyData = await amplifyResponse.json();
         
         if (!amplifyResponse.ok) {
+            if (amplifyResponse.status === 401 && supabase) {
+                // Try to refresh token
+                console.log('Got 401 on amplify, attempting to refresh token...');
+                const { data: { session }, error } = await supabase.auth.refreshSession();
+                if (!error && session) {
+                    authToken = session.access_token;
+                    localStorage.setItem('authToken', authToken);
+                    // Retry just the amplify part
+                    const retryResponse = await fetch(`${API_URL}/amplify/${createData.content.id}/amplify`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${authToken}`
+                        },
+                        body: JSON.stringify({ platforms, tone, style: 'engaging' })
+                    });
+                    
+                    const retryData = await retryResponse.json();
+                    if (retryResponse.ok) {
+                        displayAmplifiedResults(retryData.amplifiedContent);
+                        await loadContent();
+                        contentForm.reset();
+                        return;
+                    }
+                }
+            }
             console.error('Amplify error:', amplifyData);
             throw new Error(amplifyData.details || amplifyData.error || 'Failed to amplify content');
         }
@@ -372,6 +421,7 @@ async function createContent(title, content, platforms, tone) {
         contentForm.reset();
         
     } catch (error) {
+        console.error('Content creation error:', error);
         alert(error.message);
     }
 }
