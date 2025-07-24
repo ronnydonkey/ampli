@@ -113,16 +113,19 @@ async function signOut() {
 
 async function checkAuth() {
     const token = localStorage.getItem('authToken');
-    if (!token) return;
+    const storedSession = localStorage.getItem('supabaseSession');
     
-    // First try to refresh the session with Supabase
+    if (!token && !storedSession) return;
+    
+    // First try to get the current session from Supabase
     if (supabase) {
         try {
-            console.log('Attempting to refresh Supabase session...');
-            const { data: { session }, error } = await supabase.auth.refreshSession();
+            console.log('Getting current Supabase session...');
+            const { data: { session }, error } = await supabase.auth.getSession();
             
             if (!error && session) {
-                console.log('Session refreshed successfully');
+                console.log('Found valid Supabase session');
+                console.log('Session expires at:', new Date(session.expires_at * 1000));
                 authToken = session.access_token;
                 currentUser = session.user;
                 localStorage.setItem('authToken', authToken);
@@ -130,34 +133,56 @@ async function checkAuth() {
                 showDashboard();
                 return;
             } else {
-                console.log('Failed to refresh session:', error);
+                console.log('No valid Supabase session found:', error);
+                
+                // Try to refresh if we have a stored session
+                if (storedSession) {
+                    console.log('Attempting to refresh session with stored refresh token...');
+                    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+                    
+                    if (!refreshError && refreshData.session) {
+                        console.log('Session refreshed successfully');
+                        authToken = refreshData.session.access_token;
+                        currentUser = refreshData.session.user;
+                        localStorage.setItem('authToken', authToken);
+                        localStorage.setItem('supabaseSession', JSON.stringify(refreshData.session));
+                        showDashboard();
+                        return;
+                    } else {
+                        console.log('Failed to refresh session:', refreshError);
+                    }
+                }
             }
-        } catch (refreshError) {
-            console.error('Error refreshing session:', refreshError);
+        } catch (sessionError) {
+            console.error('Error checking session:', sessionError);
         }
     }
     
-    // Fallback to checking with server
-    try {
-        const response = await fetch(`${API_URL}/auth/me`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            authToken = token;
-            currentUser = data.user;
-            showDashboard();
-        } else {
-            console.log('Token invalid, clearing auth');
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('supabaseSession');
+    // Fallback to checking with server if we still have a token
+    if (token) {
+        try {
+            const response = await fetch(`${API_URL}/auth/me`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                authToken = token;
+                currentUser = data.user;
+                showDashboard();
+                return;
+            } else {
+                console.log('Server says token is invalid');
+            }
+        } catch (error) {
+            console.error('Auth check error:', error);
         }
-    } catch (error) {
-        console.error('Auth check error:', error);
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('supabaseSession');
     }
+    
+    // If all fails, clear auth
+    console.log('All auth checks failed, clearing stored auth');
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('supabaseSession');
 }
 
 // UI functions
@@ -614,7 +639,11 @@ async function signInWithGoogle() {
         const oauthOptions = {
             provider: 'google',
             options: {
-                redirectTo: window.location.origin
+                redirectTo: window.location.origin,
+                queryParams: {
+                    access_type: 'offline',
+                    prompt: 'consent'
+                }
             }
         };
         
@@ -750,6 +779,36 @@ async function handleOAuthCallback() {
 
 // Initialize Supabase client directly
 let supabase = null;
+let tokenRefreshTimer = null;
+
+// Token refresh management
+function setupTokenRefreshTimer(expiresAt) {
+    clearTokenRefreshTimer();
+    
+    // Refresh token 5 minutes before expiry
+    const refreshTime = (expiresAt * 1000) - Date.now() - (5 * 60 * 1000);
+    
+    if (refreshTime > 0) {
+        console.log('Setting up token refresh in', Math.round(refreshTime / 1000 / 60), 'minutes');
+        tokenRefreshTimer = setTimeout(async () => {
+            if (supabase) {
+                console.log('Auto-refreshing token...');
+                try {
+                    await supabase.auth.refreshSession();
+                } catch (error) {
+                    console.error('Auto token refresh failed:', error);
+                }
+            }
+        }, refreshTime);
+    }
+}
+
+function clearTokenRefreshTimer() {
+    if (tokenRefreshTimer) {
+        clearTimeout(tokenRefreshTimer);
+        tokenRefreshTimer = null;
+    }
+}
 
 function initializeSupabase() {
     try {
@@ -790,23 +849,37 @@ function initializeSupabase() {
         console.log('Supabase client initialized successfully');
         
         // Set up auth state change listener
-        supabase.auth.onAuthStateChange((event, session) => {
+        supabase.auth.onAuthStateChange(async (event, session) => {
             console.log('Auth state changed:', event, session);
             
             if (event === 'SIGNED_IN' && session) {
                 console.log('User signed in via state change:', session.user);
+                console.log('Session expires at:', new Date(session.expires_at * 1000));
                 authToken = session.access_token;
                 currentUser = session.user;
                 localStorage.setItem('authToken', authToken);
                 localStorage.setItem('supabaseSession', JSON.stringify(session));
                 showDashboard();
+                
+                // Set up token refresh timer
+                setupTokenRefreshTimer(session.expires_at);
             } else if (event === 'SIGNED_OUT') {
                 console.log('User signed out via state change');
                 authToken = null;
                 currentUser = null;
                 localStorage.removeItem('authToken');
                 localStorage.removeItem('supabaseSession');
+                clearTokenRefreshTimer();
                 showAuth();
+            } else if (event === 'TOKEN_REFRESHED' && session) {
+                console.log('Token refreshed:', session);
+                authToken = session.access_token;
+                currentUser = session.user;
+                localStorage.setItem('authToken', authToken);
+                localStorage.setItem('supabaseSession', JSON.stringify(session));
+                
+                // Update refresh timer
+                setupTokenRefreshTimer(session.expires_at);
             }
         });
         
