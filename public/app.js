@@ -195,6 +195,17 @@ async function loadContent() {
     try {
         console.log('Loading content with token:', authToken ? 'present' : 'missing');
         
+        // First, validate the token with debug endpoint
+        const debugResponse = await fetch(`${API_URL}/debug/validate-token`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (debugResponse.ok) {
+            const debugData = await debugResponse.json();
+            console.log('Token validation result:', debugData);
+        }
+        
         const response = await fetch(`${API_URL}/content`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
@@ -206,17 +217,23 @@ async function loadContent() {
             if (response.status === 401) {
                 // Token is invalid, try to refresh
                 if (supabase) {
+                    console.log('Attempting to refresh session...');
                     const { data: { session }, error } = await supabase.auth.refreshSession();
                     if (!error && session) {
+                        console.log('Session refreshed successfully');
                         authToken = session.access_token;
+                        currentUser = session.user;
                         localStorage.setItem('authToken', authToken);
+                        localStorage.setItem('supabaseSession', JSON.stringify(session));
                         // Retry loading content with new token
                         return loadContent();
+                    } else {
+                        console.error('Failed to refresh session:', error);
                     }
                 }
                 // If refresh failed, redirect to login
                 showMessage('Session expired. Please sign in again.', 'error');
-                signOut();
+                setTimeout(() => signOut(), 2000);
                 return;
             }
             
