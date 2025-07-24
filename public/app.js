@@ -363,6 +363,30 @@ function displayAmplifiedResults(results) {
             `;
         }
         
+        // Handle Twitter threads specially
+        if (platform === 'twitter' && Array.isArray(result.adaptedContent)) {
+            const totalChars = result.adaptedContent.reduce((sum, tweet) => sum + tweet.length, 0);
+            return `
+                <div class="platform-result">
+                    <h3>Twitter Thread (${result.adaptedContent.length} tweets)</h3>
+                    <div class="twitter-thread">
+                        ${result.adaptedContent.map((tweet, index) => `
+                            <div class="thread-tweet">
+                                <div class="tweet-number">Tweet ${index + 1}:</div>
+                                <div class="adapted-content">${tweet}</div>
+                                <div class="twitter-counter">Characters: ${tweet.length}/280</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="thread-summary">Total thread length: ${totalChars} characters across ${result.adaptedContent.length} tweets</div>
+                    <div class="result-actions">
+                        <button onclick="copyContent('${platform}')">Copy Thread</button>
+                        <button onclick="downloadContent('${platform}')">Download</button>
+                    </div>
+                </div>
+            `;
+        }
+        
         return `
             <div class="platform-result">
                 <h3>${platform.charAt(0).toUpperCase() + platform.slice(1)}</h3>
@@ -380,67 +404,92 @@ function displayAmplifiedResults(results) {
 // Store results globally for utility functions
 let currentResults = {};
 
-// Twitter character limit handler
+// Twitter character limit handler with thread support
 function formatTwitterPost(text, suffix, tone) {
     const TWITTER_LIMIT = 280;
-    const ELLIPSIS = '...';
-    
-    // Calculate available space for main content
-    let availableSpace = TWITTER_LIMIT - suffix.length;
-    
-    // Add space for ellipsis if needed
-    if (text.length > availableSpace) {
-        availableSpace -= ELLIPSIS.length;
-    }
+    const THREAD_NUMBERING = 4; // Space for " 1/X"
     
     // Handle different tones with prefixes
     let prefix = '';
     if (tone === 'urgent') {
         prefix = '🚨 ';
-        availableSpace -= prefix.length;
     } else if (tone === 'inspirational') {
         prefix = '✨ ';
-        availableSpace -= prefix.length;
     }
     
-    // Ensure we don't cut off mid-word
-    let truncatedText = text;
-    if (text.length > availableSpace) {
-        // Find the last complete word that fits
-        truncatedText = text.substring(0, availableSpace);
-        const lastSpaceIndex = truncatedText.lastIndexOf(' ');
-        if (lastSpaceIndex > availableSpace * 0.7) { // Only cut at word boundary if it's not too short
-            truncatedText = truncatedText.substring(0, lastSpaceIndex);
-        }
-        truncatedText += ELLIPSIS;
+    // Check if we need to create a thread
+    const fullContent = prefix + text + (suffix ? (tone === 'casual' || tone === 'friendly' ? ' ' + suffix : '\n\n' + suffix) : '');
+    
+    if (fullContent.length <= TWITTER_LIMIT) {
+        // Single tweet is fine
+        return fullContent;
     }
     
-    // Construct final tweet
-    let finalTweet = prefix + truncatedText;
+    // Create thread
+    return createTwitterThread(text, suffix, tone, prefix);
+}
+
+function createTwitterThread(text, suffix, tone, prefix = '') {
+    const TWITTER_LIMIT = 280;
+    const THREAD_NUMBERING = 6; // Space for " (1/X)"
     
-    // Add suffix with proper spacing
-    if (suffix && suffix.trim()) {
-        if (tone === 'casual' || tone === 'friendly') {
-            finalTweet += ' ' + suffix;
+    // Split text into sentences for better thread breaks
+    const sentences = text.match(/[^\.!?]+[\.!?]+/g) || [text];
+    const threads = [];
+    let currentThread = prefix;
+    let threadNumber = 1;
+    
+    for (let i = 0; i < sentences.length; i++) {
+        const sentence = sentences[i].trim();
+        const potentialThread = currentThread + (currentThread === prefix ? '' : ' ') + sentence;
+        
+        // Check if adding this sentence would exceed limit (accounting for thread numbering)
+        if (potentialThread.length + THREAD_NUMBERING > TWITTER_LIMIT && currentThread !== prefix) {
+            // Start new thread
+            threads.push(currentThread);
+            currentThread = sentence;
+            threadNumber++;
         } else {
-            finalTweet += '\n\n' + suffix;
+            currentThread = potentialThread;
         }
     }
     
-    // Final safety check - if somehow still over limit, trim more aggressively
-    if (finalTweet.length > TWITTER_LIMIT) {
-        const overage = finalTweet.length - TWITTER_LIMIT;
-        const textPart = prefix + truncatedText;
-        const newTextLength = textPart.length - overage - ELLIPSIS.length;
-        if (newTextLength > 50) { // Ensure minimum readable length
-            finalTweet = prefix + text.substring(0, newTextLength) + ELLIPSIS;
-            if (suffix && suffix.trim()) {
-                finalTweet += (tone === 'casual' || tone === 'friendly') ? ' ' + suffix : '\n\n' + suffix;
-            }
+    // Add the last thread
+    if (currentThread.trim()) {
+        threads.push(currentThread);
+    }
+    
+    // Add suffix to last thread if there's space
+    if (suffix && threads.length > 0) {
+        const lastThread = threads[threads.length - 1];
+        const suffixToAdd = (tone === 'casual' || tone === 'friendly') ? ' ' + suffix : '\n\n' + suffix;
+        
+        if (lastThread.length + suffixToAdd.length + THREAD_NUMBERING <= TWITTER_LIMIT) {
+            threads[threads.length - 1] = lastThread + suffixToAdd;
+        } else {
+            // Create separate thread for suffix
+            threads.push(suffix);
         }
     }
     
-    return finalTweet;
+    // Add thread numbering
+    const totalThreads = threads.length;
+    const numberedThreads = threads.map((thread, index) => {
+        const threadNum = `(${index + 1}/${totalThreads})`;
+        
+        // Ensure the thread with numbering doesn't exceed limit
+        if (thread.length + threadNum.length + 1 > TWITTER_LIMIT) {
+            // Trim thread to fit numbering
+            const availableSpace = TWITTER_LIMIT - threadNum.length - 4; // -4 for space and ellipsis
+            const trimmed = thread.substring(0, availableSpace);
+            const lastSpace = trimmed.lastIndexOf(' ');
+            return (lastSpace > availableSpace * 0.7 ? trimmed.substring(0, lastSpace) : trimmed) + '... ' + threadNum;
+        }
+        
+        return thread + ' ' + threadNum;
+    });
+    
+    return numberedThreads;
 }
 
 // Client-side fallback amplification when server is unavailable
@@ -600,8 +649,20 @@ async function startAmplificationSequence(platforms) {
 window.copyContent = function(platform) {
     const content = currentResults[platform]?.adaptedContent;
     if (content) {
-        navigator.clipboard.writeText(content).then(() => {
-            alert('Content copied to clipboard!');
+        let textToCopy;
+        if (Array.isArray(content)) {
+            // Twitter thread - join with thread separators
+            textToCopy = content.map((tweet, index) => `Tweet ${index + 1}:\n${tweet}`).join('\n\n---\n\n');
+        } else {
+            textToCopy = content;
+        }
+        
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            if (Array.isArray(content)) {
+                alert(`Twitter thread (${content.length} tweets) copied to clipboard!`);
+            } else {
+                alert('Content copied to clipboard!');
+            }
         });
     }
 };
