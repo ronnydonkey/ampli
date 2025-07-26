@@ -1,7 +1,7 @@
 // API configuration
 const API_URL = window.location.hostname === 'localhost' 
     ? 'http://localhost:3001/api' 
-    : `${window.location.protocol}//${window.location.host}/api`;
+    : '/api';
 let authToken = null;
 let currentUser = null;
 
@@ -50,15 +50,13 @@ async function signIn(email, password) {
             throw new Error(data.error || 'Sign in failed');
         }
         
-        if (!data.session || !data.session.access_token) {
-            throw new Error('Invalid response from server');
+        if (data.session) {
+            authToken = data.session.access_token;
+            currentUser = data.user;
+            localStorage.setItem('authToken', authToken);
+            showDashboard();
+            showMessage('Signed in successfully! 🎉', 'success');
         }
-        
-        authToken = data.session.access_token;
-        currentUser = data.user;
-        localStorage.setItem('authToken', authToken);
-        
-        showDashboard();
     } catch (error) {
         console.error('Sign in error:', error);
         showMessage(error.message, 'error');
@@ -67,8 +65,6 @@ async function signIn(email, password) {
 
 async function signUp(email, password, fullName) {
     try {
-        console.log('Attempting signup with:', { email, fullName });
-        
         const response = await fetch(`${API_URL}/auth/signup`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -76,17 +72,12 @@ async function signUp(email, password, fullName) {
         });
         
         const data = await response.json();
-        console.log('Signup response:', data);
         
         if (!response.ok) {
-            console.error('Signup error:', data);
             throw new Error(data.error || 'Sign up failed');
         }
         
         showMessage('Account created! Please check your email to verify your account.', 'success');
-        
-        // Switch to sign in tab
-        document.querySelector('[data-tab="signin"]').click();
     } catch (error) {
         console.error('Sign up error:', error);
         showMessage(error.message, 'error');
@@ -98,103 +89,38 @@ async function signOut() {
         await fetch(`${API_URL}/auth/signout`, {
             method: 'POST',
             headers: { 
-                'Authorization': `Bearer ${authToken}`
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json' 
             }
         });
+        
+        authToken = null;
+        currentUser = null;
+        localStorage.removeItem('authToken');
+        showAuth();
+        showMessage('Signed out successfully', 'success');
     } catch (error) {
         console.error('Sign out error:', error);
+        authToken = null;
+        currentUser = null;
+        localStorage.removeItem('authToken');
+        showAuth();
     }
-    
-    authToken = null;
-    currentUser = null;
-    localStorage.removeItem('authToken');
-    showAuth();
 }
 
-async function checkAuth() {
-    const token = localStorage.getItem('authToken');
-    const storedSession = localStorage.getItem('supabaseSession');
+// Message display
+function showMessage(message, type = 'info') {
+    const messageEl = authMessage;
+    messageEl.textContent = message;
+    messageEl.className = `auth-message ${type}`;
+    messageEl.classList.remove('hidden');
     
-    if (!token && !storedSession) return;
-    
-    // First try to get the current session from Supabase
-    if (supabase) {
-        try {
-            console.log('Getting current Supabase session...');
-            const { data: { session }, error } = await supabase.auth.getSession();
-            
-            if (!error && session) {
-                console.log('Found valid Supabase session');
-                console.log('Session expires at:', new Date(session.expires_at * 1000));
-                authToken = session.access_token;
-                currentUser = session.user;
-                localStorage.setItem('authToken', authToken);
-                localStorage.setItem('supabaseSession', JSON.stringify(session));
-                showDashboard();
-                return;
-            } else {
-                console.log('No valid Supabase session found:', error);
-                
-                // Try to refresh if we have a stored session
-                if (storedSession) {
-                    console.log('Attempting to refresh session with stored refresh token...');
-                    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-                    
-                    if (!refreshError && refreshData.session) {
-                        console.log('Session refreshed successfully');
-                        authToken = refreshData.session.access_token;
-                        currentUser = refreshData.session.user;
-                        localStorage.setItem('authToken', authToken);
-                        localStorage.setItem('supabaseSession', JSON.stringify(refreshData.session));
-                        showDashboard();
-                        return;
-                    } else {
-                        console.log('Failed to refresh session:', refreshError);
-                    }
-                }
-            }
-        } catch (sessionError) {
-            console.error('Error checking session:', sessionError);
-        }
-    }
-    
-    // Fallback to checking with server if we still have a token
-    if (token) {
-        try {
-            const response = await fetch(`${API_URL}/auth/me`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                authToken = token;
-                currentUser = data.user;
-                showDashboard();
-                return;
-            } else {
-                console.log('Server says token is invalid');
-            }
-        } catch (error) {
-            console.error('Auth check error:', error);
-        }
-    }
-    
-    // If all fails, clear auth
-    console.log('All auth checks failed, clearing stored auth');
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('supabaseSession');
-}
-
-// UI functions
-function showMessage(message, type) {
-    authMessage.textContent = message;
-    authMessage.className = `message ${type}`;
     setTimeout(() => {
-        authMessage.textContent = '';
-        authMessage.className = 'message';
+        messageEl.classList.add('hidden');
     }, 5000);
 }
 
+// UI display functions
 function showAuth() {
     authSection.classList.remove('hidden');
     dashboardSection.classList.add('hidden');
@@ -205,10 +131,8 @@ function showDashboard() {
     dashboardSection.classList.remove('hidden');
     userEmail.textContent = currentUser.email;
     
-    
-    // Don't load server content if we're having token issues
-    // Just show the interface ready for client-side amplification
-    displayClientOnlyMode();
+    // Load user's content
+    loadContent();
 }
 
 // Archive state
@@ -218,6 +142,44 @@ let expandedItems = new Set();
 // Archive DOM elements
 const archiveSearch = document.getElementById('archive-search');
 const archiveFilter = document.getElementById('archive-filter');
+
+// Enhanced content functions with backend integration
+async function loadContent() {
+    try {
+        console.log('Loading content from server...');
+        
+        if (!authToken) {
+            displayClientOnlyMode();
+            return;
+        }
+
+        const response = await fetch(`${API_URL}/content`, {
+            headers: { 
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json' 
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to load content');
+        }
+        
+        const data = await response.json();
+        allContent = data.content || [];
+        
+        console.log('Loaded content:', allContent);
+        
+        if (allContent.length === 0) {
+            displayEmptyState();
+        } else {
+            displayContent(allContent);
+        }
+        
+    } catch (error) {
+        console.error('Error loading content:', error);
+        displayClientOnlyMode();
+    }
+}
 
 // Client-only mode for when server is having issues
 function displayClientOnlyMode() {
@@ -231,19 +193,15 @@ function displayClientOnlyMode() {
     `;
 }
 
-// Content functions - modified to not cause logout
-async function loadContent() {
-    try {
-        console.log('Attempting to load content...');
-        
-        // Skip server calls that might cause logout issues
-        // Just display client-only mode
-        displayClientOnlyMode();
-        
-    } catch (error) {
-        console.error('Error in loadContent:', error);
-        displayClientOnlyMode();
-    }
+function displayEmptyState() {
+    contentList.innerHTML = `
+        <div class="empty-state">
+            <div class="empty-icon">🚀</div>
+            <h3>Ready to Branch Out Content!</h3>
+            <p>Create content above and it will be branched using smart templates optimized for each social platform.</p>
+            <p>Your content will be saved and categorized for easy access later.</p>
+        </div>
+    `;
 }
 
 function filterAndDisplayContent() {
@@ -254,14 +212,19 @@ function filterAndDisplayContent() {
     
     // Apply filter
     if (filterValue !== 'all') {
-        filtered = filtered.filter(item => item.status === filterValue);
+        if (filterValue === 'favorites') {
+            filtered = filtered.filter(item => item.is_favorite);
+        } else {
+            filtered = filtered.filter(item => item.status === filterValue);
+        }
     }
     
     // Apply search
     if (searchTerm) {
         filtered = filtered.filter(item => 
             (item.title?.toLowerCase().includes(searchTerm) ||
-             item.original_content.toLowerCase().includes(searchTerm))
+             item.original_content.toLowerCase().includes(searchTerm) ||
+             item.subject_category?.toLowerCase().includes(searchTerm))
         );
     }
     
@@ -277,17 +240,39 @@ function displayContent(content) {
     contentList.innerHTML = content.map(item => {
         const isExpanded = expandedItems.has(item.id);
         const hasBranchedContent = item.platform_posts && item.platform_posts.length > 0;
+        const createdDate = new Date(item.created_at);
         
         return `
-            <div class="content-item ${isExpanded ? 'expanded' : ''}" data-id="${item.id}" onclick="toggleContentItem('${item.id}')">
-                <h3>${item.title || 'Untitled'}</h3>
-                <div class="content-preview">${item.original_content}</div>
-                <div class="content-meta">
-                    <span>${new Date(item.created_at).toLocaleDateString()}</span>
-                    <span>${item.status}</span>
-                    ${hasBranchedContent ? '<span>📱 Branched</span>' : ''}
+            <div class="content-item ${isExpanded ? 'expanded' : ''}" data-id="${item.id}">
+                <div class="content-header" onclick="toggleContentItem('${item.id}')">
+                    <div class="content-meta">
+                        <h3>${item.title || 'Untitled'}</h3>
+                        <div class="content-tags">
+                            ${item.subject_category ? `<span class="category-tag">${item.subject_category}</span>` : ''}
+                            ${item.is_favorite ? '<span class="favorite-indicator">⭐</span>' : ''}
+                            <span class="date-tag">${createdDate.toLocaleDateString()}</span>
+                            ${hasBranchedContent ? '<span class="platform-tag">📱 Branched</span>' : ''}
+                        </div>
+                    </div>
+                    <div class="content-actions">
+                        <button onclick="event.stopPropagation(); toggleFavorite('${item.id}', ${!item.is_favorite})" 
+                                class="favorite-btn ${item.is_favorite ? 'active' : ''}" 
+                                title="Toggle favorite">
+                            ${item.is_favorite ? '⭐' : '☆'}
+                        </button>
+                        <span class="expand-icon">${isExpanded ? '▼' : '▶'}</span>
+                    </div>
                 </div>
-                ${isExpanded && hasBranchedContent ? renderBranchedVersions(item.platform_posts) : ''}
+                <div class="content-preview">${item.original_content.substring(0, 150)}${item.original_content.length > 150 ? '...' : ''}</div>
+                ${isExpanded ? `
+                    <div class="content-full">
+                        <div class="original-content">
+                            <h4>Original Content:</h4>
+                            <p>${item.original_content}</p>
+                        </div>
+                        ${hasBranchedContent ? renderBranchedVersions(item.platform_posts) : ''}
+                    </div>
+                ` : ''}
             </div>
         `;
     }).join('');
@@ -301,45 +286,88 @@ function renderBranchedVersions(platformPosts) {
     }, {});
     
     return `
-        <div class="amplified-versions">
-            <h4>Branched Versions</h4>
-            ${Object.entries(groupedPosts).map(([platform, posts]) => {
-                const latestPost = posts[0]; // Assuming posts are ordered by date
-                return `
-                    <div class="platform-version">
-                        <h5>${platform.charAt(0).toUpperCase() + platform.slice(1)}</h5>
-                        <div class="platform-content">${latestPost.adapted_content}</div>
-                        <div class="version-actions">
-                            <button onclick="copyPlatformContent(event, '${latestPost.id}', '${platform}')">Copy</button>
-                            <button onclick="downloadPlatformContent(event, '${latestPost.id}', '${platform}')">Download</button>
+        <div class="branched-content">
+            <h4>Platform Versions:</h4>
+            ${Object.entries(groupedPosts).map(([platform, posts]) => `
+                <div class="platform-section">
+                    <h5>${platform.charAt(0).toUpperCase() + platform.slice(1)}</h5>
+                    ${posts.map(post => `
+                        <div class="platform-post">
+                            <p>${post.adapted_content}</p>
+                            <div class="post-actions">
+                                <button onclick="copyPlatformContent(event, '${post.id}', '${platform}')" class="copy-btn">Copy</button>
+                                <span class="char-count">${post.character_count} chars</span>
+                                ${post.status === 'posted' ? '<span class="status-posted">Posted</span>' : ''}
+                            </div>
                         </div>
-                    </div>
-                `;
-            }).join('')}
+                    `).join('')}
+                </div>
+            `).join('')}
         </div>
     `;
 }
 
+// Enhanced content creation with backend integration
 async function createContent(title, content, platforms, tone) {
     try {
-        console.log('Creating content - using client-side amplification');
+        console.log('Creating content with backend integration...');
         
         // Show amplification animation
         showBranchingAnimation(platforms);
         
-        // Add a realistic delay to make it feel like AI processing
-        await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+        // Determine subject category based on content
+        const subjectCategory = await determineSubjectCategory(content);
         
-        // Skip server entirely and use client-side fallback
-        console.log('Using client-side template branching...');
-        const fallbackResults = createFallbackBranching(content, platforms, tone);
+        // Create content in database first
+        let savedContent = null;
+        if (authToken) {
+            try {
+                const contentResponse = await fetch(`${API_URL}/content`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json' 
+                    },
+                    body: JSON.stringify({
+                        title: title || generateTitleFromContent(content),
+                        originalContent: content,
+                        subjectCategory,
+                        tags: extractTags(content, tone),
+                        wordCount: content.split(/\s+/).length
+                    })
+                });
+                
+                if (contentResponse.ok) {
+                    const contentData = await contentResponse.json();
+                    savedContent = contentData.content;
+                    console.log('Content saved to database:', savedContent);
+                } else {
+                    console.error('Failed to save content to database');
+                }
+            } catch (error) {
+                console.error('Error saving content:', error);
+            }
+        }
+        
+        // Generate platform-specific content
+        const results = await generatePlatformContent(content, platforms, tone);
+        
+        // Save platform posts to database if we have saved content
+        if (savedContent && authToken) {
+            await savePlatformPosts(savedContent.id, results);
+        }
         
         // Hide animation and show results
         hideBranchingAnimation();
-        displayBranchedResults(fallbackResults);
+        displayBranchedResults(results);
         
         // Reset form
         contentForm.reset();
+        
+        // Reload content to show the new item
+        if (authToken) {
+            loadContent();
+        }
         
         showMessage('Content branched successfully! 🚀', 'success');
         
@@ -350,60 +378,477 @@ async function createContent(title, content, platforms, tone) {
     }
 }
 
-function displayBranchedResults(results) {
-    resultsSection.classList.remove('hidden');
-    currentResults = results; // Store for utility functions
+// Helper functions for content processing
+function determineSubjectCategory(content) {
+    const keywords = {
+        'Business': ['business', 'strategy', 'growth', 'revenue', 'profit', 'market', 'customer', 'sales'],
+        'Technology': ['tech', 'software', 'AI', 'digital', 'innovation', 'app', 'platform', 'data'],
+        'Marketing': ['marketing', 'brand', 'campaign', 'social media', 'content', 'advertising', 'promotion'],
+        'Productivity': ['productivity', 'efficiency', 'workflow', 'time management', 'organization', 'planning'],
+        'Personal': ['personal', 'life', 'experience', 'journey', 'story', 'reflection', 'thoughts'],
+        'Education': ['learn', 'education', 'knowledge', 'skill', 'training', 'development', 'course'],
+        'Health': ['health', 'wellness', 'fitness', 'mental health', 'wellbeing', 'exercise', 'nutrition']
+    };
     
-    amplifiedResults.innerHTML = Object.entries(results).map(([platform, result]) => {
-        if (result.status !== 'success') {
-            return `
-                <div class="platform-result">
-                    <h3>${platform.charAt(0).toUpperCase() + platform.slice(1)}</h3>
-                    <p class="error">Failed to generate content: ${result.error}</p>
-                </div>
-            `;
-        }
+    const contentLower = content.toLowerCase();
+    let bestMatch = 'General';
+    let maxScore = 0;
+    
+    Object.entries(keywords).forEach(([category, terms]) => {
+        const score = terms.reduce((sum, term) => {
+            return sum + (contentLower.includes(term) ? 1 : 0);
+        }, 0);
         
-        // Handle Twitter threads specially
-        if (platform === 'twitter' && Array.isArray(result.adaptedContent)) {
-            const totalChars = result.adaptedContent.reduce((sum, tweet) => sum + tweet.length, 0);
-            return `
-                <div class="platform-result">
-                    <h3>Twitter Thread (${result.adaptedContent.length} tweets)</h3>
-                    <div class="twitter-thread">
-                        ${result.adaptedContent.map((tweet, index) => `
-                            <div class="thread-tweet">
-                                <div class="tweet-number">Tweet ${index + 1}:</div>
-                                <div class="adapted-content">${tweet}</div>
-                                <div class="twitter-counter">Characters: ${tweet.length}/280</div>
-                            </div>
-                        `).join('')}
-                    </div>
-                    <div class="thread-summary">Total thread length: ${totalChars} characters across ${result.adaptedContent.length} tweets</div>
-                    <div class="result-actions">
-                        <button onclick="copyContent('${platform}')">Copy Thread</button>
-                        <button onclick="downloadContent('${platform}')">Download</button>
-                    </div>
-                </div>
-            `;
+        if (score > maxScore) {
+            maxScore = score;
+            bestMatch = category;
         }
+    });
+    
+    return bestMatch;
+}
+
+function generateTitleFromContent(content) {
+    // Extract first sentence or first 50 characters as title
+    const firstSentence = content.match(/^[^.!?]*[.!?]/);
+    if (firstSentence) {
+        return firstSentence[0].trim();
+    }
+    return content.substring(0, 50) + (content.length > 50 ? '...' : '');
+}
+
+function extractTags(content, tone) {
+    const tags = [tone];
+    const contentLower = content.toLowerCase();
+    
+    // Add relevant tags based on content
+    if (contentLower.includes('announcement') || contentLower.includes('news')) tags.push('announcement');
+    if (contentLower.includes('tip') || contentLower.includes('advice')) tags.push('tips');
+    if (contentLower.includes('story') || contentLower.includes('experience')) tags.push('story');
+    if (contentLower.includes('question') || contentLower.includes('what do you think')) tags.push('question');
+    
+    return [...new Set(tags)]; // Remove duplicates
+}
+
+async function generatePlatformContent(content, platforms, tone) {
+    // Try server-side generation first, fallback to client-side templates
+    if (authToken) {
+        try {
+            const response = await fetch(`${API_URL}/amplify`, {
+                method: 'POST',
+                headers: { 
+                    'Authorization': `Bearer ${authToken}`,
+                    'Content-Type': 'application/json' 
+                },
+                body: JSON.stringify({
+                    content,
+                    platforms,
+                    tone
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log('Server-generated content:', data);
+                return data.results;
+            } else {
+                console.log('Server generation failed, using fallback templates');
+            }
+        } catch (error) {
+            console.error('Server generation error:', error);
+        }
+    }
+    
+    // Fallback to client-side templates
+    return createFallbackBranching(content, platforms, tone);
+}
+
+async function savePlatformPosts(contentId, results) {
+    try {
+        const promises = Object.entries(results).map(async ([platform, result]) => {
+            if (result.status === 'success') {
+                return fetch(`${API_URL}/platforms`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json' 
+                    },
+                    body: JSON.stringify({
+                        contentId,
+                        platform,
+                        adaptedContent: Array.isArray(result.adaptedContent) 
+                            ? result.adaptedContent.join('\n\n') 
+                            : result.adaptedContent,
+                        formatType: Array.isArray(result.adaptedContent) ? 'thread' : 'single',
+                        characterCount: Array.isArray(result.adaptedContent) 
+                            ? result.adaptedContent.reduce((sum, tweet) => sum + tweet.length, 0)
+                            : result.adaptedContent.length
+                    })
+                });
+            }
+        });
         
-        return `
-            <div class="platform-result">
-                <h3>${platform.charAt(0).toUpperCase() + platform.slice(1)}</h3>
-                <div class="adapted-content">${result.adaptedContent}</div>
-                ${platform === 'twitter' ? `<div class="twitter-counter">Characters: ${result.adaptedContent.length}/280</div>` : ''}
-                <div class="result-actions">
-                    <button onclick="copyContent('${platform}')">Copy</button>
-                    <button onclick="downloadContent('${platform}')">Download</button>
-                </div>
-            </div>
-        `;
-    }).join('');
+        await Promise.all(promises);
+        console.log('Platform posts saved successfully');
+    } catch (error) {
+        console.error('Error saving platform posts:', error);
+    }
+}
+
+// Favorite toggle function
+async function toggleFavorite(contentId, isFavorite) {
+    try {
+        if (!authToken) return;
+        
+        const response = await fetch(`${API_URL}/content/${contentId}/favorite`, {
+            method: 'PATCH',
+            headers: { 
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify({ is_favorite: isFavorite })
+        });
+        
+        if (response.ok) {
+            // Update local data
+            const item = allContent.find(c => c.id === contentId);
+            if (item) {
+                item.is_favorite = isFavorite;
+                displayContent(allContent);
+            }
+            
+            showMessage(isFavorite ? 'Added to favorites ⭐' : 'Removed from favorites', 'success');
+        }
+    } catch (error) {
+        console.error('Error toggling favorite:', error);
+    }
 }
 
 // Store results globally for utility functions
 let currentResults = {};
+
+// File upload functionality
+let uploadedFiles = [];
+let isProcessingFiles = false;
+
+// File upload event listeners
+function initializeFileUpload() {
+    const fileUploadArea = document.getElementById('file-upload-area');
+    const fileInput = document.getElementById('file-input');
+    const filePreviewArea = document.getElementById('file-preview-area');
+    const fileList = document.getElementById('file-list');
+    const processingStatus = document.getElementById('processing-status');
+    
+    if (!fileUploadArea || !fileInput) return;
+    
+    // Click to upload
+    fileUploadArea.addEventListener('click', () => {
+        fileInput.click();
+    });
+    
+    // File input change
+    fileInput.addEventListener('change', (e) => {
+        handleFileSelection(e.target.files);
+    });
+    
+    // Drag and drop
+    fileUploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        fileUploadArea.classList.add('drag-over');
+    });
+    
+    fileUploadArea.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        fileUploadArea.classList.remove('drag-over');
+    });
+    
+    fileUploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        fileUploadArea.classList.remove('drag-over');
+        handleFileSelection(e.dataTransfer.files);
+    });
+}
+
+// Handle file selection
+async function handleFileSelection(files) {
+    if (files.length === 0) return;
+    
+    // Validate files
+    const validFiles = [];
+    const maxSize = 25 * 1024 * 1024; // 25MB
+    const allowedTypes = [
+        'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/m4a',
+        'video/mp4', 'video/mpeg', 'video/quicktime',
+        'text/plain', 'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    
+    for (let file of files) {
+        if (file.size > maxSize) {
+            showToast(`File ${file.name} is too large (max 25MB)`, 'error');
+            continue;
+        }
+        
+        const extension = file.name.toLowerCase().split('.').pop();
+        const supportedExtensions = ['mp3', 'mp4', 'wav', 'm4a', 'txt', 'pdf', 'docx'];
+        
+        if (!allowedTypes.includes(file.type) && !supportedExtensions.includes(extension)) {
+            showToast(`File type ${extension} not supported`, 'error');
+            continue;
+        }
+        
+        validFiles.push(file);
+    }
+    
+    if (validFiles.length === 0) return;
+    
+    // Upload and process files
+    await uploadFiles(validFiles);
+}
+
+// Upload files to server
+async function uploadFiles(files) {
+    const processingStatus = document.getElementById('processing-status');
+    const filePreviewArea = document.getElementById('file-preview-area');
+    const fileList = document.getElementById('file-list');
+    
+    // Show processing status
+    processingStatus.style.display = 'flex';
+    isProcessingFiles = true;
+    
+    try {
+        const formData = new FormData();
+        
+        // Add files to FormData
+        files.forEach(file => {
+            formData.append('files', file);
+        });
+        
+        // Add preview items immediately
+        files.forEach(file => {
+            const fileId = `temp-${Date.now()}-${Math.random()}`;
+            addFilePreview(file, fileId, 'processing');
+        });
+        
+        filePreviewArea.style.display = 'block';
+        
+        // Upload to server
+        let response;
+        if (authToken) {
+            response = await fetch(`${API_URL}/files/upload`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: formData
+            });
+        } else {
+            // Fallback for no auth - simulate processing
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            response = {
+                ok: true,
+                json: () => Promise.resolve({
+                    files: files.map(file => ({
+                        id: `fallback-${Date.now()}`,
+                        originalName: file.name,
+                        size: file.size,
+                        type: file.type,
+                        status: 'completed',
+                        content: '[File upload requires account - content will be processed when logged in]',
+                        contentType: 'fallback'
+                    }))
+                })
+            };
+        }
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Upload failed');
+        }
+        
+        // Clear temporary previews
+        fileList.innerHTML = '';
+        
+        // Add processed files
+        data.files.forEach(file => {
+            addFilePreview(file, file.id, file.status, file.content, file.error);
+            if (file.status === 'completed' && file.content) {
+                uploadedFiles.push({
+                    id: file.id,
+                    name: file.originalName,
+                    content: file.content,
+                    type: file.contentType
+                });
+            }
+        });
+        
+        // Update textarea if we have content
+        updateTextareaWithFileContent();
+        
+        showToast(`${data.files.length} file(s) processed successfully!`, 'success');
+        
+    } catch (error) {
+        console.error('File upload error:', error);
+        showToast('File upload failed: ' + error.message, 'error');
+        
+        // Update failed items
+        const failedItems = fileList.querySelectorAll('.file-item');
+        failedItems.forEach(item => {
+            item.classList.remove('processing');
+            item.classList.add('error');
+            const status = item.querySelector('.file-status');
+            if (status) {
+                status.className = 'file-status error';
+                status.textContent = 'Upload failed';
+            }
+        });
+    } finally {
+        processingStatus.style.display = 'none';
+        isProcessingFiles = false;
+    }
+}
+
+// Add file preview to UI
+function addFilePreview(file, fileId, status, content = null, error = null) {
+    const fileList = document.getElementById('file-list');
+    
+    const fileItem = document.createElement('div');
+    fileItem.className = `file-item ${status}`;
+    fileItem.dataset.fileId = fileId;
+    
+    const fileIcon = getFileIcon(file.type || file.originalName);
+    const fileSize = formatFileSize(file.size);
+    
+    fileItem.innerHTML = `
+        <div class="file-info">
+            <div class="file-icon">${fileIcon}</div>
+            <div class="file-details">
+                <div class="file-name">${file.originalName || file.name}</div>
+                <div class="file-meta">
+                    <span>${fileSize}</span>
+                    <span>${file.type}</span>
+                </div>
+            </div>
+        </div>
+        <div class="file-status ${status}">
+            ${getStatusText(status, error)}
+        </div>
+        <div class="file-actions">
+            ${status === 'completed' && content ? `<button class="file-action-btn" onclick="previewFileContent('${fileId}')">Preview</button>` : ''}
+            <button class="file-action-btn danger" onclick="removeFile('${fileId}')">Remove</button>
+        </div>
+    `;
+    
+    fileList.appendChild(fileItem);
+}
+
+// Helper functions
+function getFileIcon(typeOrName) {
+    const type = typeOrName.toLowerCase();
+    if (type.includes('audio') || type.includes('mp3') || type.includes('wav')) return '🎵';
+    if (type.includes('video') || type.includes('mp4')) return '🎥';
+    if (type.includes('text') || type.includes('txt')) return '📄';
+    if (type.includes('pdf')) return '📕';
+    if (type.includes('doc')) return '📘';
+    return '📎';
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function getStatusText(status, error) {
+    switch (status) {
+        case 'processing': return 'Processing...';
+        case 'completed': return 'Completed ✓';
+        case 'error': return error || 'Error ✗';
+        default: return status;
+    }
+}
+
+// Update textarea with file content
+function updateTextareaWithFileContent() {
+    const textarea = document.getElementById('content-text');
+    if (!textarea || uploadedFiles.length === 0) return;
+    
+    const existingContent = textarea.value.trim();
+    const fileContents = uploadedFiles.map(file => {
+        const header = `\n\n--- From ${file.name} ---\n`;
+        return header + file.content;
+    }).join('\n\n');
+    
+    if (existingContent) {
+        textarea.value = existingContent + fileContents;
+    } else {
+        textarea.value = fileContents.trim();
+    }
+    
+    // Auto-resize textarea
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.max(120, textarea.scrollHeight) + 'px';
+}
+
+// Global functions for UI interactions
+window.previewFileContent = function(fileId) {
+    const file = uploadedFiles.find(f => f.id === fileId);
+    if (!file) return;
+    
+    // Create a simple modal for content preview
+    const modal = document.createElement('div');
+    modal.innerHTML = `
+        <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center;" onclick="this.remove()">
+            <div style="background: white; padding: 2rem; border-radius: 8px; max-width: 80%; max-height: 80%; overflow: auto;" onclick="event.stopPropagation()">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3>Preview: ${file.name}</h3>
+                    <button onclick="this.closest('div').parentElement.remove()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+                </div>
+                <div style="white-space: pre-wrap; font-family: monospace; background: #f5f5f5; padding: 1rem; border-radius: 4px; max-height: 400px; overflow: auto;">${file.content}</div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+};
+
+window.removeFile = function(fileId) {
+    // Remove from uploaded files array
+    uploadedFiles = uploadedFiles.filter(f => f.id !== fileId);
+    
+    // Remove from UI
+    const fileItem = document.querySelector(`[data-file-id="${fileId}"]`);
+    if (fileItem) {
+        fileItem.remove();
+    }
+    
+    // Hide preview area if no files
+    const fileList = document.getElementById('file-list');
+    const filePreviewArea = document.getElementById('file-preview-area');
+    if (fileList && fileList.children.length === 0) {
+        filePreviewArea.style.display = 'none';
+    }
+    
+    showToast('File removed', 'info');
+};
+
+window.clearAllFiles = function() {
+    uploadedFiles = [];
+    const fileList = document.getElementById('file-list');
+    const filePreviewArea = document.getElementById('file-preview-area');
+    
+    if (fileList) fileList.innerHTML = '';
+    if (filePreviewArea) filePreviewArea.style.display = 'none';
+    
+    showToast('All files cleared', 'info');
+};
+
+// Initialize file upload when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    initializeFileUpload();
+});
 
 // Twitter character limit handler with thread support
 function formatTwitterPost(text, suffix, tone) {
@@ -525,6 +970,41 @@ function createFallbackBranching(content, platforms, tone) {
             friendly: (text) => `Hey friends! 👋\n\n${text}\n\nI'd love to hear what you think about this! Comment below and let's have a great discussion! 💬`,
             urgent: (text) => `IMPORTANT UPDATE: ${text}\n\nThis is time-sensitive information. Please share this post to help spread awareness! Thank you! 🙏`,
             inspirational: (text) => `${text}\n\nRemember, every challenge is an opportunity to grow stronger. Keep pushing forward and believe in yourself! What motivates you to keep going? Share below! 💪✨`
+        },
+        tiktok: {
+            professional: (text) => `${text}\n\n💼 What's your take on this? Drop your thoughts below! \n\n#business #professional #entrepreneur #success #mindset`,
+            casual: (text) => `${text} 😎\n\nWho else can relate? 😂\n\n#relatable #daily #life #vibes #fyp`,
+            friendly: (text) => `Hey TikTok! 👋\n\n${text}\n\nLet me know what you think! 💭\n\n#community #friends #thoughts #discussion`,
+            urgent: (text) => `🚨 IMPORTANT: ${text}\n\nPlease share this! 🙏\n\n#urgent #important #psa #awareness`,
+            inspirational: (text) => `✨ ${text} ✨\n\nYou've got this! 💪 Keep pushing! \n\n#motivation #inspiration #mindset #success #growth`
+        },
+        youtube: {
+            professional: (text) => `${text}\n\nWhat do you think about this topic? I'd love to hear your perspective in the comments below. Don't forget to like and subscribe if you found this valuable!\n\n🔔 Subscribe for more insights: [Your Channel]\n💬 Join the discussion in the comments\n👍 Like if you agree\n\n#business #professional #youtube`,
+            casual: (text) => `${text}\n\nWhat's your take on this? Let me know in the comments! And hey, if you enjoyed this, smash that like button and subscribe for more content like this! 😊\n\n→ Subscribe: [Your Channel]\n→ Comment your thoughts below\n→ Like if you can relate\n\n#youtube #content #discussion`,
+            friendly: (text) => `Hey everyone! 👋\n\n${text}\n\nI'd love to hear what you all think about this! Drop your thoughts in the comments, and if you're new here, consider subscribing - it really helps the channel grow! 🙏\n\n▶️ Subscribe: [Your Channel]\n💬 Comment below\n❤️ Like this video\n\n#community #youtube #discussion`,
+            urgent: (text) => `🚨 IMPORTANT UPDATE: ${text}\n\nThis is crucial information that I needed to share with you all immediately. Please like and share this video to help spread awareness!\n\n⚠️ Please share this video\n🔔 Turn on notifications\n💬 Let me know your thoughts\n\n#urgent #important #update`,
+            inspirational: (text) => `✨ ${text} ✨\n\nRemember, every expert was once a beginner. Keep pushing forward, stay consistent, and believe in yourself! You've got this! 💪\n\nIf this motivated you, please give it a thumbs up and subscribe for more inspiring content!\n\n🎆 Subscribe for motivation\n💪 Share your goals below\n❤️ Spread the positivity\n\n#motivation #inspiration #success #mindset`
+        },
+        pinterest: {
+            professional: (text) => `💼 ${text}\n\nSave this pin for later reference! \n\n→ Follow for more business tips\n→ Save to your favorite board\n→ Share with fellow entrepreneurs\n\n#business #entrepreneur #professional #success #tips #productivity #businesstips`,
+            casual: (text) => `${text} 😊\n\nDouble tap if you agree! Save this for later 📌\n\n🌸 Follow for daily inspiration\n📌 Save to your boards\n💕 Share the love\n\n#daily #life #inspiration #mood #vibes #relatable #lifestyle`,
+            friendly: (text) => `${text}\n\nSave this pin and share it with friends who need to see this! 💕\n\n✨ Follow for more inspiration\n📌 Pin this to your boards\n👯 Tag a friend below\n\n#friends #community #inspiration #lifestyle #positivity #sharing`,
+            urgent: (text) => `🚨 IMPORTANT: ${text}\n\nSave and share this important information!\n\n⚠️ Save this pin now\n🔄 Repin to spread awareness\n💬 Comment your thoughts\n\n#important #awareness #psa #save #share #community`,
+            inspirational: (text) => `✨ ${text} ✨\n\nSave this for motivation when you need it most! 💪\n\n🎆 Follow for daily motivation\n📌 Save to your inspiration board\n❤️ Share the inspiration\n\n#motivation #inspiration #quotes #mindset #success #goals #positivity`
+        },
+        reddit: {
+            professional: (text) => `${text}\n\nWhat are your thoughts on this? I'd love to hear different perspectives from the community. Has anyone else experienced something similar?\n\nEdit: Thanks for all the thoughtful responses!`,
+            casual: (text) => `${text}\n\nAnyone else relate to this? Just me? 😅\n\nEdit: Wow, didn't expect this to blow up! Thanks for the awards kind strangers!`,
+            friendly: (text) => `${text}\n\nHey Reddit! Just wanted to share this with you all. What do you think? Always love hearing from this community!\n\nThanks in advance for any insights! 😊`,
+            urgent: (text) => `URGENT: ${text}\n\nThis is time-sensitive and I thought this community should know. Please upvote for visibility if you think others should see this.\n\nTL;DR: [Brief summary of the urgent matter]`,
+            inspirational: (text) => `${text}\n\nJust wanted to share this with everyone here. Sometimes we all need a reminder that we're capable of more than we think.\n\nTo anyone going through tough times: you've got this! 💪\n\nEdit: Thank you all for the kind words and for sharing your own stories!`
+        },
+        discord: {
+            professional: (text) => `**Professional Update** 💼\n\n${text}\n\nThoughts on this, everyone? Always interested in hearing different perspectives from the community!\n\n*Feel free to discuss in thread* 🧵`,
+            casual: (text) => `${text} 😄\n\nWhat do you all think? Anyone else dealing with something similar?\n\n*React with 👍 if you agree, 👎 if you disagree!*`,
+            friendly: (text) => `Hey everyone! 👋\n\n${text}\n\nWould love to hear your thoughts on this! This community always has such great insights 😊\n\n*Jump into voice chat if you want to discuss live!*`,
+            urgent: (text) => `@everyone **URGENT** 🚨\n\n${text}\n\nThis is time-sensitive - please read and share your thoughts ASAP!\n\n*Pinging mods to pin this if necessary*`,
+            inspirational: (text) => `✨ **Daily Inspiration** ✨\n\n${text}\n\nHope everyone's having a great day! Remember, this community is here to support each other 💪\n\n*React with ❤️ to spread the love!*`
         }
     };
     
@@ -548,11 +1028,204 @@ function createFallbackBranching(content, platforms, tone) {
     return results;
 }
 
+// Platform format suggestions
+function getPlatformFormatSuggestions(platform) {
+    const suggestions = {
+        instagram: {
+            formats: [
+                { name: 'Single Post', desc: 'Perfect for quotes, tips, or announcements' },
+                { name: 'Carousel', desc: 'Break content into 2-10 slides for tutorials' },
+                { name: 'Stories', desc: 'Behind-the-scenes or quick updates' }
+            ],
+            images: [
+                'High-quality, bright, eye-catching visuals',
+                'Include text overlay for educational content',
+                'Use consistent brand colors and fonts',
+                'Create cohesive visual flow for carousels'
+            ]
+        },
+        linkedin: {
+            formats: [
+                { name: 'Text Post', desc: 'Best for insights and professional updates' },
+                { name: 'Document Post', desc: 'Upload PDFs, slides, or infographics' },
+                { name: 'Poll', desc: 'Engage with industry-relevant questions' },
+                { name: 'Newsletter', desc: 'Ongoing thought leadership content' }
+            ],
+            images: [
+                'Professional, clean visuals',
+                'Industry-relevant images or data visualizations',
+                'Personal branding photos for authenticity',
+                'Infographics for complex information'
+            ]
+        },
+        twitter: {
+            formats: [
+                { name: 'Single Tweet', desc: 'Quick thoughts, news, or announcements' },
+                { name: 'Thread', desc: 'Break longer content into connected tweets' },
+                { name: 'Quote Tweet', desc: 'Comment on relevant industry content' },
+                { name: 'Reply Thread', desc: 'Engage with community discussions' }
+            ],
+            images: [
+                'Clear, readable graphics at small sizes',
+                'Quote cards with striking typography',
+                'Screenshots of relevant content',
+                'GIFs for personality and engagement'
+            ]
+        },
+        facebook: {
+            formats: [
+                { name: 'Standard Post', desc: 'Updates, stories, community engagement' },
+                { name: 'Live Video', desc: 'Real-time engagement for Q&As' },
+                { name: 'Event', desc: 'Webinars, workshops, gatherings' },
+                { name: 'Photo Album', desc: 'Showcase multiple related images' }
+            ],
+            images: [
+                'Warm, approachable visuals that encourage sharing',
+                'Behind-the-scenes content for authenticity',
+                'User-generated content when possible',
+                'Event photos and community highlights'
+            ]
+        },
+        tiktok: {
+            formats: [
+                { name: 'Short Video', desc: '15-60 second videos with trending audio' },
+                { name: 'Tutorial', desc: 'Quick how-to or educational content' },
+                { name: 'Trend', desc: 'Participate in viral challenges or memes' },
+                { name: 'Behind-the-Scenes', desc: 'Show your process or daily life' }
+            ],
+            images: [
+                'Vertical video format (9:16 aspect ratio)',
+                'Bold, eye-catching thumbnails and text overlays',
+                'Fast-paced editing with trending music',
+                'Authentic, unpolished content performs well'
+            ]
+        },
+        youtube: {
+            formats: [
+                { name: 'Video Description', desc: 'Detailed descriptions with timestamps' },
+                { name: 'Community Post', desc: 'Text updates, polls, and images' },
+                { name: 'YouTube Shorts', desc: 'Vertical short-form content' },
+                { name: 'Video Title', desc: 'SEO-optimized titles under 60 characters' }
+            ],
+            images: [
+                'Custom thumbnails with bold text and faces',
+                '16:9 aspect ratio for standard videos',
+                'Consistent branding and color scheme',
+                'High contrast and readable at small sizes'
+            ]
+        },
+        pinterest: {
+            formats: [
+                { name: 'Standard Pin', desc: 'Vertical image with descriptive text' },
+                { name: 'Idea Pin', desc: 'Multi-page story format pins' },
+                { name: 'Video Pin', desc: 'Short videos that auto-play' },
+                { name: 'Shopping Pin', desc: 'Product pins with pricing info' }
+            ],
+            images: [
+                'Vertical format (2:3 aspect ratio works best)',
+                'Text overlay with clear, readable fonts',
+                'Bright, high-quality images that stand out',
+                'Lifestyle and inspirational imagery'
+            ]
+        },
+        reddit: {
+            formats: [
+                { name: 'Text Post', desc: 'Discussion-focused posts with context' },
+                { name: 'Link Post', desc: 'Share articles or external content' },
+                { name: 'Image Post', desc: 'Memes, infographics, or visual content' },
+                { name: 'AMA', desc: 'Ask Me Anything format for expertise sharing' }
+            ],
+            images: [
+                'Memes and infographics perform well',
+                'Screenshots with context and commentary',
+                'Original content and personal photos',
+                'Clear, easy-to-read text in images'
+            ]
+        },
+        discord: {
+            formats: [
+                { name: 'Text Message', desc: 'Standard chat messages with formatting' },
+                { name: 'Announcement', desc: 'Important updates with @everyone ping' },
+                { name: 'Thread', desc: 'Organized discussions in message threads' },
+                { name: 'Embed', desc: 'Rich embeds with links and media' }
+            ],
+            images: [
+                'GIFs and reaction images for engagement',
+                'Screenshots for context and examples',
+                'Custom emojis and server-specific content',
+                'Memes and community inside jokes'
+            ]
+        }
+    };
+    return suggestions[platform] || { formats: [], images: [] };
+}
+
+// Fallback results display function
+function displayBasicResults(results) {
+    if (!amplifiedResults) return;
+    
+    amplifiedResults.innerHTML = Object.entries(results).map(([platform, result]) => {
+        if (result.status !== 'success') {
+            return `
+                <div class="platform-result">
+                    <h3>${platform.charAt(0).toUpperCase() + platform.slice(1)}</h3>
+                    <p class="error">Failed to generate content: ${result.error}</p>
+                </div>
+            `;
+        }
+        
+        const suggestions = getPlatformFormatSuggestions(platform);
+        
+        return `
+            <div class="platform-result">
+                <h3>${platform.charAt(0).toUpperCase() + platform.slice(1)}</h3>
+                <div class="content-display">
+                    <p class="generated-content">${Array.isArray(result.adaptedContent) ? result.adaptedContent.join('\n\n') : result.adaptedContent}</p>
+                    
+                    <div class="format-suggestions">
+                        <div class="suggestions-row">
+                            <div class="format-options">
+                                <h5>📋 Format Options:</h5>
+                                ${suggestions.formats.slice(0, 2).map(format => `
+                                    <div class="format-option">
+                                        <strong>${format.name}:</strong> ${format.desc}
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div class="image-suggestions">
+                                <h5>🎨 Image Ideas:</h5>
+                                ${suggestions.images.slice(0, 2).map(suggestion => `
+                                    <div class="image-suggestion">• ${suggestion}</div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="content-actions">
+                    <button onclick="copyToClipboard('${platform}')" class="copy-btn">Copy Content</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
 
 // Platform Cards Display Functions
 function displayPlatformCards(results) {
     const platformCardsSection = document.getElementById('platform-cards-section');
     const platformCards = document.getElementById('platform-cards');
+    
+    if (!platformCardsSection || !platformCards) {
+        console.error('Platform cards elements not found:', {
+            platformCardsSection: !!platformCardsSection,
+            platformCards: !!platformCards
+        });
+        // Fallback to old results display
+        if (resultsSection) {
+            resultsSection.classList.remove('hidden');
+            displayBasicResults(results);
+        }
+        return;
+    }
     
     platformCardsSection.classList.remove('hidden');
     
@@ -567,6 +1240,7 @@ function displayPlatformCards(results) {
             const result = results[platform];
             const preview = getContentPreview(result.adaptedContent);
             const isThread = Array.isArray(result.adaptedContent);
+            const suggestions = getPlatformFormatSuggestions(platform);
             
             return `
                 <div class="platform-card glassmorphic-card" data-platform="${platform}" onclick="openContentModal('${platform}')">
@@ -579,6 +1253,25 @@ function displayPlatformCards(results) {
                     </div>
                     <div class="platform-card-content">
                         <p class="content-preview">${preview}...</p>
+                        
+                        <div class="format-suggestions">
+                            <div class="suggestions-row">
+                                <div class="format-options">
+                                    <h5>📋 Format Options:</h5>
+                                    ${suggestions.formats.slice(0, 2).map(format => `
+                                        <div class="format-option">
+                                            <strong>${format.name}:</strong> ${format.desc}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                <div class="image-suggestions">
+                                    <h5>🎨 Image Ideas:</h5>
+                                    ${suggestions.images.slice(0, 2).map(suggestion => `
+                                        <div class="image-suggestion">• ${suggestion}</div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="platform-card-footer">
                         <span class="char-count">${getCharacterCount(result.adaptedContent)} chars</span>
@@ -758,7 +1451,12 @@ function getPlatformIcon(platform) {
         instagram: '📸',
         linkedin: '💼',
         twitter: '🐦',
-        facebook: '👥'
+        facebook: '👥',
+        tiktok: '🎵',
+        youtube: '🎬',
+        pinterest: '📌',
+        reddit: '🔴',
+        discord: '💬'
     };
     return icons[platform] || '📱';
 }
@@ -845,16 +1543,9 @@ window.toggleContentItem = function(contentId) {
     } else {
         expandedItems.add(contentId);
     }
-    displayContent(allContent.filter(item => {
-        const searchTerm = archiveSearch?.value?.toLowerCase() || '';
-        const filterValue = archiveFilter?.value || 'all';
-        
-        if (filterValue !== 'all' && item.status !== filterValue) return false;
-        if (searchTerm && !item.title?.toLowerCase().includes(searchTerm) && 
-            !item.original_content.toLowerCase().includes(searchTerm)) return false;
-        
-        return true;
-    }));
+    
+    // Refresh the display with current filters
+    filterAndDisplayContent();
 };
 
 window.copyPlatformContent = function(event, postId, platform) {
@@ -862,7 +1553,7 @@ window.copyPlatformContent = function(event, postId, platform) {
     const post = allContent.flatMap(c => c.platform_posts || []).find(p => p.id === postId);
     if (post?.adapted_content) {
         navigator.clipboard.writeText(post.adapted_content).then(() => {
-            alert(`${platform} content copied to clipboard!`);
+            showToast(`${platform} content copied!`);
         });
     }
 };
@@ -881,15 +1572,48 @@ window.downloadPlatformContent = function(event, postId, platform) {
     }
 };
 
+// Scroll to creator function
+window.scrollToCreator = function() {
+    const creatorSection = document.getElementById('creator');
+    if (creatorSection) {
+        creatorSection.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+        });
+    }
+};
+
+// Branch content function (called from HTML)
+window.branchContent = function() {
+    const title = document.getElementById('content-title').value;
+    const content = document.getElementById('content-text').value;
+    const tone = document.getElementById('tone').value;
+    
+    const platforms = Array.from(document.querySelectorAll('.platform-checkbox input:checked'))
+        .map(input => input.value);
+    
+    if (!content.trim()) {
+        alert('Please enter some content to branch');
+        return;
+    }
+    
+    if (platforms.length === 0) {
+        alert('Please select at least one platform');
+        return;
+    }
+    
+    createContent(title, content, platforms, tone);
+};
+
 // Event listeners
-signinForm.addEventListener('submit', async (e) => {
+signinForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = e.target[0].value;
     const password = e.target[1].value;
     await signIn(email, password);
 });
 
-signupForm.addEventListener('submit', async (e) => {
+signupForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fullName = e.target[0].value;
     const email = e.target[1].value;
@@ -897,34 +1621,12 @@ signupForm.addEventListener('submit', async (e) => {
     await signUp(email, password, fullName);
 });
 
-contentForm.addEventListener('submit', async (e) => {
+contentForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    
-    const title = document.getElementById('content-title').value;
-    const content = document.getElementById('content-text').value;
-    const tone = document.getElementById('tone').value;
-    
-    const platforms = Array.from(document.querySelectorAll('.platforms input:checked'))
-        .map(input => input.value);
-    
-    if (platforms.length === 0) {
-        alert('Please select at least one platform');
-        return;
-    }
-    
-    const submitBtn = document.getElementById('amplify-btn');
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Branching...';
-    
-    try {
-        await createContent(title, content, platforms, tone);
-    } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Branch Content';
-    }
+    branchContent();
 });
 
-document.getElementById('signout-btn').addEventListener('click', signOut);
+document.getElementById('signout-btn')?.addEventListener('click', signOut);
 
 // Archive event listeners
 if (archiveSearch) {
@@ -935,9 +1637,9 @@ if (archiveFilter) {
     archiveFilter.addEventListener('change', filterAndDisplayContent);
 }
 
-// Modal event listeners
-document.getElementById('modal-close').addEventListener('click', closeContentModal);
-document.getElementById('modal-copy-btn').addEventListener('click', () => {
+// Modal event listeners (if elements exist)
+document.getElementById('modal-close')?.addEventListener('click', closeContentModal);
+document.getElementById('modal-copy-btn')?.addEventListener('click', () => {
     if (currentModalContent) {
         let textToCopy;
         if (Array.isArray(currentModalContent.adaptedContent)) {
@@ -953,7 +1655,7 @@ document.getElementById('modal-copy-btn').addEventListener('click', () => {
     }
 });
 
-document.getElementById('modal-download-btn').addEventListener('click', () => {
+document.getElementById('modal-download-btn')?.addEventListener('click', () => {
     if (currentModalContent) {
         let content;
         if (Array.isArray(currentModalContent.adaptedContent)) {
@@ -976,7 +1678,7 @@ document.getElementById('modal-download-btn').addEventListener('click', () => {
 });
 
 // Close modal when clicking backdrop
-document.querySelector('.modal-backdrop').addEventListener('click', closeContentModal);
+document.querySelector('.modal-backdrop')?.addEventListener('click', closeContentModal);
 
 // Google Auth - Client-side flow
 async function signInWithGoogle() {
@@ -1016,7 +1718,7 @@ async function signInWithGoogle() {
         const oauthOptions = {
             provider: 'google',
             options: {
-                redirectTo: window.location.origin,
+                redirectTo: window.location.hostname === 'localhost' ? window.location.origin : 'https://branch-out.io',
                 queryParams: {
                     access_type: 'offline',
                     prompt: 'consent'
@@ -1052,7 +1754,7 @@ async function signInWithGoogle() {
     }
 }
 
-document.getElementById('google-auth-btn').addEventListener('click', signInWithGoogle);
+document.getElementById('google-auth-btn')?.addEventListener('click', signInWithGoogle);
 
 // Handle OAuth callback
 async function handleOAuthCallback() {
